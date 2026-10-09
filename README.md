@@ -2,7 +2,7 @@
 
 Samostatný MCP server pro správu připojení Tungsten TotalAgility a přístupů MCP klientů. Aplikace nabízí React administrační rozhraní, Fastify API, MCP přes Streamable HTTP a `stdio`, audit a SQLite úložiště.
 
-**Verze 0.2.1 – oprava připojení podle TTA REST Swaggeru.** Konektor používá REST API `/services/sdk/v1`, jeho odpověď validace `IsValid` a autorizační hlavičku TTA session ID. Podporuje interní jméno/heslo, alternativní `SYSTEM_SESSION_ID`, read-only nástroje pro joby a aktivity. Zápisové operace, dokumenty, uživatelé, Designer, PostgreSQL, Docker a plné RBAC zůstávají mimo tento release; viz [aktuální rozsah](docs/TTA_CAPABILITIES.md).
+**Verze 0.2.2 – oprava odkazu na repozitář.** Konektor používá REST API `/services/sdk/v1`, jeho odpověď validace `IsValid` a autorizační hlavičku TTA session ID. Podporuje interní jméno/heslo, alternativní `SYSTEM_SESSION_ID`, read-only nástroje pro joby a aktivity. Zápisové operace, dokumenty, uživatelé, Designer, PostgreSQL, Docker a plné RBAC zůstávají mimo tento release; viz [aktuální rozsah](docs/TTA_CAPABILITIES.md).
 
 ## Rychlý start ve Windows
 

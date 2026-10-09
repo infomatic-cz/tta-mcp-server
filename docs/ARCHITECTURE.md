@@ -1,6 +1,6 @@
 # Architektura
 
-Verze 0.2.1 nahrazuje předchozí volání SDK JSON/WCF kontraktu klientem REST podle [Swaggeru konkrétní TTA instance](https://winserver-tta26.im.cz/TotalAgility/swagger/docs/v1). Není to plná implementace všech funkcí z `CODEX_README.md`.
+Verze 0.2.2 zachovává REST klienta představeného v 0.2.1 a volá TTA API podle [Swaggeru konkrétní TTA instance](https://winserver-tta26.im.cz/TotalAgility/swagger/docs/v1). Není to plná implementace všech funkcí z `CODEX_README.md`.
 
 ```text
 MCP Streamable HTTP / stdio

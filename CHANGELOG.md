@@ -2,6 +2,13 @@
 
 Změny jsou řazeny od nejnovější verze. Projekt používá Semantic Versioning.
 
+## [0.2.2] – 2026-10-09
+
+### Opraveno
+- Odkaz na repozitář v administrační konzoli nyní míří na `https://github.com/infomatic-cz/tta-mcp-server`.
+- Build i deploy skript používají verzi archivu přímo z `package.json`, takže při dalších vydáních nezůstane deploy připnutý na staré číslo verze.
+- Aktualizováno číslo verze aplikace a MCP serveru na 0.2.2.
+
 ## [0.2.1] – 2026-10-09
 
 ### Opraveno

@@ -59,7 +59,7 @@ if (process.argv.includes("--stdio")) {
       .header("content-security-policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
   });
 
-  app.get("/health/live", async () => ({ status: "ok", version: "0.2.1" }));
+  app.get("/health/live", async () => ({ status: "ok", version: "0.2.2" }));
   app.get("/health/ready", async (_request, reply) => {
     try {
       store.db.prepare("SELECT 1").get();

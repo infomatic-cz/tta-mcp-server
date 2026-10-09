@@ -12,7 +12,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $buildRoot = 'C:\Temp\TTAMCP-Build'
-$artifact = Join-Path $buildRoot 'tta-mcp-server-0.2.1.tgz'
+$packageInfo = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'package.json') -Raw | ConvertFrom-Json
+$artifactName = "tta-mcp-server-$($packageInfo.version).tgz"
+$artifact = Join-Path $buildRoot $artifactName
 $buildScript = Join-Path $PSScriptRoot 'New-Build.ps1'
 
 if ($PublicOrigin) {
@@ -29,7 +31,7 @@ foreach ($toolName in @('ssh.exe', 'scp.exe')) {
 if (-not (Test-Path -LiteralPath $artifact)) { throw "Build artifact not found: $artifact" }
 
 $target = "$User@$Server"
-$remoteArtifact = '/tmp/tta-mcp-server-0.2.1.tgz'
+$remoteArtifact = "/tmp/$artifactName"
 & scp.exe $artifact "${target}:$remoteArtifact"
 if ($LASTEXITCODE -ne 0) { throw 'Could not copy the build archive to the VM.' }
 
@@ -37,7 +39,7 @@ $originValue = if ($PublicOrigin) { $PublicOrigin } else { '' }
 $remoteInstall = @'
 set -euo pipefail
 PUBLIC_ORIGIN="$1"
-ARCHIVE=/tmp/tta-mcp-server-0.2.1.tgz
+ARCHIVE=/tmp/__ARTIFACT_NAME__
 APP_ROOT=/opt/tta-mcp-server
 CONFIG_DIR=/etc/tta-mcp-server
 DATA_DIR=/var/lib/tta-mcp-server
@@ -78,6 +80,7 @@ systemctl restart tta-mcp-server.service
 rm -f "$ARCHIVE"
 echo 'Deployment complete. The service listens only on 127.0.0.1:8380.'
 '@
+$remoteInstall = $remoteInstall.Replace('__ARTIFACT_NAME__', $artifactName)
 
 $remoteScriptPath = Join-Path $buildRoot 'remote-install.sh'
 [IO.File]::WriteAllText($remoteScriptPath, $remoteInstall, [Text.UTF8Encoding]::new($false))
