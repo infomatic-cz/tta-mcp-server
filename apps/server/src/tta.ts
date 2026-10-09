@@ -296,6 +296,10 @@ function networkErrorDetail(error: unknown, allowUnverifiedCertificate: boolean)
       }
       if (code === "ENOTFOUND" || code === "EAI_AGAIN") return `Název TTA serveru se nepodařilo přeložit (${code}). Zkontrolujte DNS.`;
       if (code === "ECONNREFUSED") return "TTA server odmítl síťové spojení. Zkontrolujte hostitele, port a firewall.";
+      if (code === "ECONNRESET") return "TTA REST API nebo síťový prostředník resetoval spojení před HTTP odpovědí (ECONNRESET). Volba důvěry certifikátu je aktivní; prověřte dostupnost /services/sdk/v1 na IIS, reverse proxy nebo WAF.";
+      if (["ETIMEDOUT", "EHOSTUNREACH", "ENETUNREACH", "EPIPE"].includes(code)) return `Síťové spojení k TTA selhalo před HTTP odpovědí (${code}). Zkontrolujte trasu, firewall a port.`;
+      if (/^(ERR_SSL_|ERR_TLS_)/.test(code)) return `TLS handshake s TTA selhal (${code}). Ověření certifikátu bylo vypnuto pro toto připojení; zkontrolujte TLS protokoly, šifry a případný požadavek na klientský certifikát.`;
+      if (code) return `Spojení s TTA selhalo před HTTP odpovědí (${code}). Zkontrolujte síťovou trasu a konfiguraci REST API.`;
       current = record.cause;
     } else {
       break;
@@ -311,7 +315,7 @@ async function restRequest<T = unknown>(row: ConnectionRow, method: RestMethod, 
   const timer = setTimeout(() => controller.abort(), row.timeout_ms);
   const headers: Record<string, string> = {
     accept: "application/json",
-    "user-agent": "TTA-MCP-Server/0.2.5",
+    "user-agent": "TTA-MCP-Server/0.2.6",
   };
   if (options.authorization) headers.authorization = options.authorization;
   if (options.body) headers["content-type"] = "application/json; charset=utf-8";

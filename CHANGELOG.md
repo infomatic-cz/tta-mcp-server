@@ -2,6 +2,12 @@
 
 Změny jsou řazeny od nejnovější verze. Projekt používá Semantic Versioning.
 
+## [0.2.6] – 2026-10-09
+
+### Opraveno
+- Diagnostika síťových chyb nyní uvádí konkrétní kód včetně `ECONNRESET` a odlišuje reset spojení před HTTP odpovědí od selhání TLS handshake.
+- Aktualizováno číslo verze aplikace a MCP serveru na 0.2.6.
+
 ## [0.2.5] – 2026-10-09
 
 ### Přidáno
