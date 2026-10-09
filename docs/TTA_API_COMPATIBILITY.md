@@ -2,7 +2,7 @@
 
 Tento dokument odlišuje doložené informace z dokumentace od ověření běžící instalace. Verze v tabulce nejsou tímto projektem proti TTA serveru testované.
 
-| Produkt/verze | API zdroj | Stav v 0.1.1 |
+| Produkt/verze | API zdroj | Stav v 0.1.2 |
 |---|---|---|
 | TotalAgility 8.0 | [Release notes 8.0 – RESTful service](https://docshield.tungstenautomation.com/KTA/en_US/8.0.0-ivy45l9g96/help/ReleaseNotes8.0.0/TotalAgility_releasenotes/c_restfulservice.html) | Dokumentace říká, že REST API je dostupné přes Designer a autentizace používá Session ID. Běhově neověřeno. |
 | TotalAgility 8.1 | [REST API v Designeru](https://docshield.tungstenautomation.com/KTA/en_US/8.1.0-rmx0b1ux3q/help/Designer/All_Shared/Integration/c_sysrestapi.html) | Swagger dokumentace je vystavená přes Integration → TotalAgility Rest API. Běhově neověřeno. |

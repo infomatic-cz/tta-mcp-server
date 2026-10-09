@@ -20,7 +20,7 @@ function mayAccess(grant: Grant, id: string): boolean {
 }
 
 function createTools(store: Store, grant: Grant) {
-  const server = new McpServer({ name: "tta-mcp-server", version: "0.1.1" });
+  const server = new McpServer({ name: "tta-mcp-server", version: "0.1.2" });
   server.registerTool("tta_connections_list", {
     description: "Vrátí pouze TTA připojení povolená tomuto MCP klientovi. Neobsahuje přihlašovací údaje.",
     inputSchema: z.object({}),

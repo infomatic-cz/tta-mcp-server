@@ -59,7 +59,7 @@ if (process.argv.includes("--stdio")) {
       .header("content-security-policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
   });
 
-  app.get("/health/live", async () => ({ status: "ok", version: "0.1.1" }));
+  app.get("/health/live", async () => ({ status: "ok", version: "0.1.2" }));
   app.get("/health/ready", async (_request, reply) => {
     try {
       store.db.prepare("SELECT 1").get();
@@ -253,7 +253,7 @@ if (process.argv.includes("--stdio")) {
 
   app.get("/", async (_request, reply) => {
     const index = resolve(rootDir, "index.html");
-    if (!existsSync(index)) return reply.code(503).type("text/plain").send("Web application build not found. Run scripts/New-Build.ps1.");
+    if (!existsSync(index)) return reply.code(503).type("text/plain").send("Web application build not found. Run New-Build.ps1.");
     return reply.type("text/html; charset=utf-8").send(createReadStream(index));
   });
   app.setNotFoundHandler(async (request, reply) => {

@@ -11,25 +11,25 @@
 
 1. Otevřete PowerShell v kořeni projektu.
 2. Spusťte `Set-ExecutionPolicy -Scope Process Bypass`.
-3. Spusťte `./scripts/Run-Local.ps1`.
-4. Počkejte na stránku `http://127.0.0.1:8080`.
+3. Spusťte `./Run-Local.ps1`.
+4. Počkejte na stránku `http://127.0.0.1:8380`.
 5. Na obrazovce prvního nastavení zkopírujte jednorázový kód a vytvořte správce. Heslo musí mít minimálně 12 znaků.
 
 Kód se nepersistuje ani nevypisuje do logu. Server jej vrátí pouze lokálnímu socketu při prvním spuštění; po založení správce přestane být dostupný. Databáze je v `%LOCALAPPDATA%\TTA MCP Server\tta-mcp.sqlite`. Vault klíč je v tomtéž adresáři uložen ve formátu DPAPI chráněném aktuálním účtem Windows. Aplikace a její závislosti jsou v `C:\Temp\TTAMCP-Build`.
 
-Při dalších spuštěních se přihlaste vytvořeným účtem. `Ctrl+C` ukončí běžící proces. Lokální běh používá HTTP pouze na loopbacku; nepublikujte port 8080 do sítě.
+Při dalších spuštěních se přihlaste vytvořeným účtem. `Ctrl+C` ukončí běžící proces. Lokální běh používá HTTP pouze na loopbacku; nepublikujte port 8380 do sítě.
 
 ## Nový build
 
 ```powershell
-./scripts/New-Build.ps1
+./New-Build.ps1
 ```
 
 Skript vytvoří dočasnou kopii zdrojů, provede `npm ci`, TypeScript kompilaci a Vite build mimo OneDrive. Produkční výstup připraví v `C:\Temp\TTAMCP-Build\release`.
 
 ## stdio MCP klient
 
-Lokální klient může spustit `scripts/Run-Local.ps1 -Stdio`. Skript odemkne DPAPI klíč pouze pro proces Node, vynuluje proměnnou v PowerShellu při ukončení a MCP protokol posílá přes stdout. Protokol nekontaminují diagnostické výpisy.
+Lokální klient může spustit `Run-Local.ps1 -Stdio`. Skript odemkne DPAPI klíč pouze pro proces Node, vynuluje proměnnou v PowerShellu při ukončení a MCP protokol posílá přes stdout. Protokol nekontaminují diagnostické výpisy.
 
 ## Záloha
 

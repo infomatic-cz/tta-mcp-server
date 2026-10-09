@@ -2,6 +2,17 @@
 
 Změny jsou řazeny od nejnovější verze. Projekt používá Semantic Versioning.
 
+## [0.1.2] – 2026-10-09
+
+### Změněno
+- Přesunuty build, lokální spouštěcí a nasazovací PowerShell skripty do kořene projektu; opraveny jejich cesty po přesunu.
+- Výchozí port lokálního i VM provozu změněn z `8080` na `8380`, včetně konfigurace, vývojového proxy, systemd služby a návodů.
+
+### Ověření
+- Build z kořenového `New-Build.ps1` vytvořil release i Linux archiv mimo OneDrive.
+- `Run-Local.ps1` z kořene projektu spustil verzi 0.1.2 na výchozím portu 8380; health a readiness vrátily úspěch.
+- Cílová Linux VM nebyla nasazena ani ověřena.
+
 ## [0.1.1] – 2026-10-09
 
 ### Změněno

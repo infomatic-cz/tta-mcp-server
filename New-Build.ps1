@@ -2,11 +2,11 @@
 param()
 
 $ErrorActionPreference = 'Stop'
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$repoRoot = (Resolve-Path $PSScriptRoot).Path
 $buildRoot = 'C:\Temp\TTAMCP-Build'
 $workspace = Join-Path $buildRoot 'workspace'
 $release = Join-Path $buildRoot 'release'
-$archive = Join-Path $buildRoot 'tta-mcp-server-0.1.1.tgz'
+$archive = Join-Path $buildRoot 'tta-mcp-server-0.1.2.tgz'
 
 function Assert-BuildPath([string]$Path) {
     $rootPath = [IO.Path]::GetFullPath($buildRoot).TrimEnd('\') + '\'

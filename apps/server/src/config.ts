@@ -9,7 +9,7 @@ function booleanValue(value: string | undefined, fallback: boolean): boolean {
 }
 
 function portValue(value: string | undefined): number {
-  const port = Number(value ?? 8080);
+  const port = Number(value ?? 8380);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error("TTA_PORT must be an integer between 1 and 65535.");
   }

@@ -16,7 +16,7 @@ StateDirectoryMode=0750
 UMask=0077
 Environment=NODE_ENV=production
 Environment=TTA_HOST=127.0.0.1
-Environment=TTA_PORT=8080
+Environment=TTA_PORT=8380
 Environment=TTA_DATA_DIR=/var/lib/tta-mcp-server
 Environment=TTA_VAULT_KEY_FILE=%d/tta-vault-key
 EnvironmentFile=-/etc/tta-mcp-server/server.env

@@ -7,7 +7,7 @@ Nasazovací skript vytváří systemd službu, ale nepřidává veřejný TLS te
 Z Windows stanice:
 
 ```powershell
-./scripts/Deploy-Server.ps1 -Server 'tta-mcp.example.cz' -User 'pavel' -PublicOrigin 'https://tta-mcp.example.cz'
+./Deploy-Server.ps1 -Server 'tta-mcp.example.cz' -User 'pavel' -PublicOrigin 'https://tta-mcp.example.cz'
 ```
 
 Nasazovací uživatel potřebuje SSH klíč a neinteraktivní oprávnění `sudo` (`sudo -n`); při přihlášení jako `root` se sudo nepoužije. Skript sestaví artefakt v `C:\Temp\TTAMCP-Build`, odešle jej do `/tmp`, na VM nainstaluje produkční závislosti pro Linux, vytvoří účet `tta-mcp-server`, databázový adresář a službu `tta-mcp-server.service`. Na pracovní stanici musí být dostupné `ssh.exe` a `scp.exe`.
@@ -16,13 +16,13 @@ První vault klíč generuje přímo VM. `systemd-creds encrypt` jej zapíše v 
 
 ## První přihlášení na VM
 
-Port aplikace je dostupný pouze na `127.0.0.1:8080`. Z pracovní stanice vytvořte SSH tunel:
+Port aplikace je dostupný pouze na `127.0.0.1:8380`. Z pracovní stanice vytvořte SSH tunel:
 
 ```powershell
-ssh -L 8080:127.0.0.1:8080 pavel@tta-mcp.example.cz
+ssh -L 8380:127.0.0.1:8380 pavel@tta-mcp.example.cz
 ```
 
-Otevřete `http://127.0.0.1:8080`, vytvořte prvního správce a odhlaste se. Setup kód není přístupný přes veřejnou doménu; setup API kontroluje lokální Host a socket.
+Otevřete `http://127.0.0.1:8380`, vytvořte prvního správce a odhlaste se. Setup kód není přístupný přes veřejnou doménu; setup API kontroluje lokální Host a socket.
 
 Před zpřístupněním aplikace uživatelům nainstalujte TLS reverse proxy. Příklad Nginx:
 
@@ -32,7 +32,7 @@ server {
     server_name tta-mcp.example.cz;
     # ssl_certificate a ssl_certificate_key nastavte podle správce certifikátu.
     location / {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:8380;
         proxy_http_version 1.1;
         proxy_set_header Host tta-mcp.example.cz;
         proxy_set_header X-Forwarded-For $remote_addr;
@@ -43,7 +43,7 @@ server {
 }
 ```
 
-Zajistěte, aby proxy přijímala pouze HTTPS, nepřeposílala podvržený `X-Forwarded-For` a měla `Host` nastavený na vaši doménu. Síťový firewall VM ponechte otevřený pro SSH a HTTPS reverse proxy; port 8080 není třeba zveřejnit. Poté nastavte `TTA_COOKIE_SECURE=true` v `/etc/tta-mcp-server/server.env` a proveďte `sudo systemctl restart tta-mcp-server`.
+Zajistěte, aby proxy přijímala pouze HTTPS, nepřeposílala podvržený `X-Forwarded-For` a měla `Host` nastavený na vaši doménu. Síťový firewall VM ponechte otevřený pro SSH a HTTPS reverse proxy; port 8380 není třeba zveřejnit. Poté nastavte `TTA_COOKIE_SECURE=true` v `/etc/tta-mcp-server/server.env` a proveďte `sudo systemctl restart tta-mcp-server`.
 
 ## Správa služby
 
@@ -53,7 +53,7 @@ sudo journalctl -u tta-mcp-server -f
 sudo systemctl restart tta-mcp-server
 ```
 
-Logy neobsahují request body, cookie ani bearer tokeny. Nepovolujte přímý příchozí přístup na port 8080.
+Logy neobsahují request body, cookie ani bearer tokeny. Nepovolujte přímý příchozí přístup na port 8380.
 
 ## Záloha a obnova
 
@@ -61,4 +61,4 @@ Zastavte službu a zálohujte `/var/lib/tta-mcp-server` i `/etc/tta-mcp-server/v
 
 ## Ruční aktualizace
 
-`Deploy-Server.ps1` vytvoří novou release složku a přepne symlink `current`; existující DB a systemd credential zůstávají na místě. Před aktualizací vytvořte zálohu. Automatické rollback databázového schématu není v 0.1.1 implementován.
+`Deploy-Server.ps1` vytvoří novou release složku a přepne symlink `current`; existující DB a systemd credential zůstávají na místě. Před aktualizací vytvořte zálohu. Automatické rollback databázového schématu není v 0.1.2 implementován.

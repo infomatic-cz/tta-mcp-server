@@ -1,6 +1,6 @@
 # Architektura
 
-Verze 0.1.1 je první dokončená technická etapa, nikoliv plná integrace TotalAgility.
+Verze 0.1.2 je první dokončená technická etapa, nikoliv plná integrace TotalAgility.
 
 ```text
 React UI ──same-origin──> Fastify admin API ──> SQLite
@@ -33,5 +33,5 @@ Lokální proces naslouchá na `127.0.0.1`. Vzdálený proces také naslouchá p
 ## Rozhodnutí, která je nutné rozšířit
 
 - Ověřit oficiální SDK JSON/SOAP/REST kontrakty pro cílové verze; pak přidat `TtaAdapter` a capability registry.
-- Přidat skutečné víceuživatelské role a delegaci připojení. 0.1.1 obsahuje jen systémového správce a omezení vzdálených MCP tokenů.
+- Přidat skutečné víceuživatelské role a delegaci připojení. 0.1.2 obsahuje jen systémového správce a omezení vzdálených MCP tokenů.
 - Přidat PostgreSQL, migrace, zálohy/obnovu, monitoring a testovací sadu před produkčním víceinstančním provozem.

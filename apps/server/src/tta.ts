@@ -88,7 +88,7 @@ export async function probeConnection(store: Store, row: ConnectionRow): Promise
       method: "GET",
       redirect: "manual",
       signal: abort.signal,
-      headers: { accept: "text/html, application/json;q=0.8, */*;q=0.2", "user-agent": "TTA-MCP-Server/0.1.1" },
+      headers: { accept: "text/html, application/json;q=0.8, */*;q=0.2", "user-agent": "TTA-MCP-Server/0.1.2" },
     });
     const durationMs = Date.now() - start;
     if (response.status === 401 || response.status === 403) {

@@ -1,5 +1,12 @@
 # Výsledky ověření
 
+## 0.1.2 (2026-10-09)
+
+- `New-Build.ps1` z kořene projektu úspěšně dokončil TypeScript/Vite build a vytvořil release a Linux archiv v `C:\Temp\TTAMCP-Build`.
+- `Run-Local.ps1` z kořene projektu spustil sestavenou verzi bez explicitního `TTA_PORT`; server naslouchal na `127.0.0.1:8380`.
+- `/health/live` vrátil verzi 0.1.2 a stav `ok`; `/health/ready` vrátil stav `ready`.
+- Linux VM ani skutečná TTA instalace nebyly v této změně ověřeny.
+
 ## 0.1.1 (2026-10-09)
 
 - Čistý build `scripts/New-Build.ps1`: úspěšná TypeScript kompilace, Vite build a vytvoření release i Linux archivu v `C:\Temp\TTAMCP-Build`.

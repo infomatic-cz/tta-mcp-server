@@ -30,11 +30,11 @@ Audit obsahuje aktéra, typ akce, ID cíle, výsledek a čas. Nepřidává vstup
 
 ## Provozní požadavky pro VM
 
-- TLS certifikát a reverse proxy, firewall blokující port 8080 z veřejné sítě.
+- TLS certifikát a reverse proxy, firewall blokující port 8380 z veřejné sítě.
 - systemd credentials a zálohování vault credentialu společně s DB.
 - Samostatný neprivilegovaný účet služby, aktualizace OS/Node a omezený SSH/sudo přístup.
 - Pravidelná kontrola auditních záznamů a rotace MCP tokenů.
 
-## Omezení 0.1.1
+## Omezení 0.1.2
 
 Vzdálené OAuth, víceuživatelské role, CSRF synchronizační token, rate limit s distribuovaným úložištěm, rotace klíčů a TTA autentizační adaptéry nejsou implementovány. Nasazení na VM je vhodné pro ověřovací pilot za VPN/TLS, nikoli jako hotová enterprise multi-tenant služba.

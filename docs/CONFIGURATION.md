@@ -5,7 +5,7 @@
 | Proměnná | Výchozí | Význam |
 |---|---|---|
 | `TTA_HOST` | `127.0.0.1` | Adresa bindu. Pro jinou než loopback adresu je povinný `TTA_PUBLIC_ORIGIN`. |
-| `TTA_PORT` | `8080` | HTTP port. |
+| `TTA_PORT` | `8380` | HTTP port. |
 | `TTA_DATA_DIR` | `%LOCALAPPDATA%\TTA MCP Server` / `~/.local/share/tta-mcp-server` | Databázový adresář; uchovávejte mimo zdrojový repozitář. |
 | `TTA_VAULT_KEY` | — | Dočasné base64 32B tajemství v procesu. Používejte jen při DPAPI lokálním spuštění. |
 | `TTA_VAULT_KEY_FILE` | — | Cesta k runtime credential souboru, např. systemd `%d/tta-vault-key`. Soubor musí obsahovat base64 32B klíč. |

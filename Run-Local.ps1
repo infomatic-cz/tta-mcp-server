@@ -5,7 +5,6 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $buildRoot = 'C:\Temp\TTAMCP-Build'
 $release = Join-Path $buildRoot 'release'
 $entry = Join-Path $release 'dist\server\index.js'
@@ -48,7 +47,7 @@ $priorDataDir = $env:TTA_DATA_DIR
 $priorPort = $env:TTA_PORT
 $env:TTA_VAULT_KEY = $clearKey
 $env:TTA_DATA_DIR = $dataDir
-$env:TTA_PORT = if ($env:TTA_PORT) { $env:TTA_PORT } else { '8080' }
+$env:TTA_PORT = if ($env:TTA_PORT) { $env:TTA_PORT } else { '8380' }
 $clearKey = $null
 
 try {

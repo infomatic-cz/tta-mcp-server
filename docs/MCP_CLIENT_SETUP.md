@@ -11,7 +11,7 @@ Neposílejte token v URL, příkazové historii, repozitáři ani do běžných 
 
 ## Lokální stdio
 
-Spusťte `scripts/Run-Local.ps1 -Stdio`. Přesná konfigurace klienta se liší. Obecná podoba:
+Spusťte `Run-Local.ps1 -Stdio`. Přesná konfigurace klienta se liší. Obecná podoba:
 
 ```json
 {
@@ -23,7 +23,7 @@ Spusťte `scripts/Run-Local.ps1 -Stdio`. Přesná konfigurace klienta se liší.
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        "C:\\Users\\pavel\\OneDrive\\Development\\Web\\TTA\\TTA MCP Server\\scripts\\Run-Local.ps1",
+        "C:\\Users\\pavel\\OneDrive\\Development\\Web\\TTA\\TTA MCP Server\\Run-Local.ps1",
         "-Stdio"
       ]
     }
