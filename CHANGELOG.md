@@ -2,6 +2,17 @@
 
 Změny jsou řazeny od nejnovější verze. Projekt používá Semantic Versioning.
 
+## [0.2.4] – 2026-10-09
+
+### Přidáno
+- Nastavení „Důvěřovat certifikátu TTA“ pro jednotlivé připojení; ve výchozím stavu zůstává ověřování TLS zapnuté.
+- Diagnostika testu rozlišuje chyby TLS certifikátu, DNS a odmítnuté síťové spojení.
+- SQLite migrace přidává příznak důvěry certifikátu bez změny stávajících profilů.
+
+### Bezpečnost
+- Vysvětleno riziko vypnutí kontroly TLS identity; doporučenou cestou zůstává instalace interní CA.
+- Aktualizováno číslo verze aplikace a MCP serveru na 0.2.4.
+
 ## [0.2.3] – 2026-10-09
 
 ### Změněno

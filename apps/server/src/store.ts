@@ -21,6 +21,7 @@ export interface ConnectionRow {
   enabled: number;
   timeout_ms: number;
   sdk_path: string;
+  trust_invalid_certificate: number;
   auth_mode: "PASSWORD" | "SYSTEM_SESSION_ID";
   logon_protocol: 5 | 7 | 8;
   credential_ciphertext: string | null;
@@ -85,6 +86,7 @@ export class Store {
         enabled INTEGER NOT NULL DEFAULT 1,
         timeout_ms INTEGER NOT NULL DEFAULT 10000,
         sdk_path TEXT NOT NULL DEFAULT '/services/sdk/v1',
+        trust_invalid_certificate INTEGER NOT NULL DEFAULT 0,
         auth_mode TEXT NOT NULL DEFAULT 'PASSWORD',
         logon_protocol INTEGER NOT NULL DEFAULT 7,
         credential_ciphertext TEXT,
@@ -125,6 +127,9 @@ export class Store {
     if (!connectionColumns.some((column) => column.name === "logon_protocol")) {
       this.db.exec("ALTER TABLE connections ADD COLUMN logon_protocol INTEGER NOT NULL DEFAULT 7");
     }
+    if (!connectionColumns.some((column) => column.name === "trust_invalid_certificate")) {
+      this.db.exec("ALTER TABLE connections ADD COLUMN trust_invalid_certificate INTEGER NOT NULL DEFAULT 0");
+    }
     const migrationVersion = Number(this.db.pragma("user_version", { simple: true }) ?? 0);
     if (migrationVersion < 1) {
       this.db.exec(`UPDATE connections
@@ -132,6 +137,7 @@ export class Store {
             last_checked_at=NULL, last_status=NULL, last_error=NULL`);
       this.db.pragma("user_version = 1");
     }
+    if (migrationVersion < 2) this.db.pragma("user_version = 2");
     if (process.platform !== "win32") chmodSync(config.dbPath, 0o600);
   }
 

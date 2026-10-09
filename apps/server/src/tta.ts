@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { Agent as HttpsAgent, request as httpsRequest } from "node:https";
 import { z } from "zod/v4";
 import type { Store, ConnectionRow } from "./store.js";
 import type { Vault } from "./vault.js";
@@ -22,6 +23,7 @@ export const connectionInput = z.object({
   enabled: z.boolean().default(true),
   timeoutMs: z.number().int().min(1000).max(60000).default(10000),
   apiPath: apiPathSchema,
+  trustInvalidCertificate: z.boolean().default(false),
   authMode: z.enum(["PASSWORD", "SYSTEM_SESSION_ID"]).default("PASSWORD"),
   credentials: z.union([passwordCredentials, systemSessionCredentials]).optional(),
   clearCredentials: z.boolean().optional().default(false),
@@ -78,6 +80,7 @@ export function safeConnection(row: ConnectionRow) {
     enabled: Boolean(row.enabled),
     timeoutMs: row.timeout_ms,
     apiPath: row.sdk_path,
+    trustInvalidCertificate: Boolean(row.trust_invalid_certificate),
     authMode: row.auth_mode,
     credentialsStored: Boolean(row.credential_ciphertext),
     createdAt: row.created_at,
@@ -112,15 +115,15 @@ export function saveConnection(store: Store, vault: Vault, config: AppConfig, in
   if (current) {
     store.db.prepare(`
       UPDATE connections SET name=?, base_url=?, deployment_type=?, tta_version=?, enabled=?, timeout_ms=?,
-        sdk_path=?, auth_mode=?, credential_ciphertext=?, updated_at=? WHERE id=?
+        sdk_path=?, trust_invalid_certificate=?, auth_mode=?, credential_ciphertext=?, updated_at=? WHERE id=?
     `).run(input.name, baseUrl, input.deploymentType, input.version || null, Number(input.enabled), input.timeoutMs,
-      apiPath, input.authMode, encryptedCredential, now, connectionId);
+      apiPath, Number(input.trustInvalidCertificate), input.authMode, encryptedCredential, now, connectionId);
   } else {
     store.db.prepare(`
-      INSERT INTO connections(id,name,base_url,deployment_type,tta_version,enabled,timeout_ms,sdk_path,auth_mode,logon_protocol,credential_ciphertext,created_at,updated_at)
-      VALUES(?,?,?,?,?,?,?,?,?,7,?,?,?)
+      INSERT INTO connections(id,name,base_url,deployment_type,tta_version,enabled,timeout_ms,sdk_path,trust_invalid_certificate,auth_mode,logon_protocol,credential_ciphertext,created_at,updated_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,7,?,?,?)
     `).run(connectionId, input.name, baseUrl, input.deploymentType, input.version || null, Number(input.enabled), input.timeoutMs,
-      apiPath, input.authMode, encryptedCredential, now, now);
+      apiPath, Number(input.trustInvalidCertificate), input.authMode, encryptedCredential, now, now);
   }
   invalidateTtaSession(connectionId);
   return store.db.prepare("SELECT * FROM connections WHERE id = ?").get(connectionId) as ConnectionRow;
@@ -139,6 +142,7 @@ type TtaCredentials = z.infer<typeof passwordCredentials> | z.infer<typeof syste
 type RestMethod = "GET" | "POST";
 type QueryValue = string | number | boolean | undefined;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
+const unverifiedTlsAgent = new HttpsAgent({ keepAlive: true, rejectUnauthorized: false });
 const sessionCache = new Map<string, string>();
 const sessionLocks = new Map<string, Promise<string>>();
 const sessionGenerations = new Map<string, number>();
@@ -218,6 +222,88 @@ async function readLimitedBody(response: Response): Promise<string> {
   return new TextDecoder().decode(bytes);
 }
 
+function requestWithUnverifiedTls(url: URL, init: RequestInit): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+    const request = httpsRequest(url, {
+      method: init.method,
+      headers: {
+        ...(init.headers as Record<string, string>),
+        ...(typeof init.body === "string" ? { "content-length": String(Buffer.byteLength(init.body)) } : {}),
+      },
+      signal: init.signal ?? undefined,
+      agent: unverifiedTlsAgent,
+    }, (incoming) => {
+      const status = incoming.statusCode ?? 502;
+      const contentLength = Number(incoming.headers["content-length"]);
+      if (Number.isFinite(contentLength) && contentLength > MAX_RESPONSE_BYTES) {
+        incoming.destroy();
+        fail(new TtaSdkError("Odpověď TTA překročila limit 2 MB.", status));
+        return;
+      }
+      const chunks: Buffer[] = [];
+      let total = 0;
+      incoming.on("data", (chunk: Buffer | Uint8Array) => {
+        total += chunk.byteLength;
+        if (total > MAX_RESPONSE_BYTES) {
+          incoming.destroy();
+          fail(new TtaSdkError("Odpověď TTA překročila limit 2 MB.", status));
+          return;
+        }
+        chunks.push(Buffer.from(chunk));
+      });
+      incoming.once("error", fail);
+      incoming.once("end", () => {
+        if (settled) return;
+        const headers = new Headers();
+        for (const [name, value] of Object.entries(incoming.headers)) {
+          if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(", ") : value);
+        }
+        const body = Buffer.concat(chunks);
+        const responseBody = [204, 205, 304].includes(status) || body.length === 0 ? null : body;
+        try {
+          const response = new Response(responseBody, { status, headers });
+          settled = true;
+          resolve(response);
+        } catch (error) {
+          fail(error instanceof Error ? error : new Error("TTA REST API vrátilo neplatnou HTTP odpověď."));
+        }
+      });
+    });
+    request.once("error", fail);
+    if (typeof init.body === "string") request.write(init.body);
+    request.end();
+  });
+}
+
+function networkErrorDetail(error: unknown, allowUnverifiedCertificate: boolean): string {
+  let current: unknown = error;
+  const seen = new Set<unknown>();
+  for (let depth = 0; depth < 6 && current && !seen.has(current); depth += 1) {
+    seen.add(current);
+    if (typeof current === "object") {
+      const record = current as { code?: unknown; cause?: unknown };
+      const code = typeof record.code === "string" ? record.code : "";
+      if (/^(CERT_|ERR_TLS_CERT_|ERR_SSL_CERTIFICATE_VERIFY_FAILED|DEPTH_ZERO_SELF_SIGNED_CERT|SELF_SIGNED_CERT_IN_CHAIN|UNABLE_TO_VERIFY_LEAF_SIGNATURE)/.test(code)) {
+        return allowUnverifiedCertificate
+          ? `TLS handshake s TTA selhal i s vypnutou kontrolou důvěryhodnosti certifikátu (${code}). Zkontrolujte podporované TLS protokoly a certifikát serveru.`
+          : `Ověření TLS certifikátu TTA selhalo (${code}). Nainstalujte interní CA do systémového úložiště, nebo pro toto připojení výslovně zapněte „Důvěřovat certifikátu TTA“.`;
+      }
+      if (code === "ENOTFOUND" || code === "EAI_AGAIN") return `Název TTA serveru se nepodařilo přeložit (${code}). Zkontrolujte DNS.`;
+      if (code === "ECONNREFUSED") return "TTA server odmítl síťové spojení. Zkontrolujte hostitele, port a firewall.";
+      current = record.cause;
+    } else {
+      break;
+    }
+  }
+  return "TTA REST API není dosažitelné. Zkontrolujte DNS, síťovou trasu, port a TLS certifikát.";
+}
+
 async function restRequest<T = unknown>(row: ConnectionRow, method: RestMethod, route: string,
   options: { query?: Record<string, QueryValue>; body?: JsonObject; authorization?: string; authentication?: boolean } = {}): Promise<T> {
   const url = restUrl(row, route, options.query);
@@ -225,18 +311,21 @@ async function restRequest<T = unknown>(row: ConnectionRow, method: RestMethod, 
   const timer = setTimeout(() => controller.abort(), row.timeout_ms);
   const headers: Record<string, string> = {
     accept: "application/json",
-    "user-agent": "TTA-MCP-Server/0.2.3",
+    "user-agent": "TTA-MCP-Server/0.2.4",
   };
   if (options.authorization) headers.authorization = options.authorization;
   if (options.body) headers["content-type"] = "application/json; charset=utf-8";
   try {
-    const response = await fetch(url, {
+    const init: RequestInit = {
       method,
       redirect: "manual",
       signal: controller.signal,
       headers,
       ...(options.body ? { body: JSON.stringify(options.body) } : {}),
-    });
+    };
+    const response = row.trust_invalid_certificate && url.protocol === "https:"
+      ? await requestWithUnverifiedTls(url, init)
+      : await fetch(url, init);
     if (response.status >= 300 && response.status < 400) {
       void response.body?.cancel().catch(() => undefined);
       throw new TtaSdkError("TTA REST API vrátilo přesměrování; zkontrolujte základní URL a cestu REST API.", response.status);
@@ -259,7 +348,7 @@ async function restRequest<T = unknown>(row: ConnectionRow, method: RestMethod, 
   } catch (error) {
     if (error instanceof TtaSdkError) throw error;
     const timeout = error instanceof Error && error.name === "AbortError";
-    throw new TtaSdkError(timeout ? "Vypršel časový limit požadavku na TTA REST API." : "TTA REST API není dosažitelné nebo selhalo ověření TLS/DNS.");
+    throw new TtaSdkError(timeout ? "Vypršel časový limit požadavku na TTA REST API." : networkErrorDetail(error, Boolean(row.trust_invalid_certificate)));
   } finally {
     clearTimeout(timer);
   }

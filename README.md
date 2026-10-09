@@ -2,7 +2,7 @@
 
 Samostatný MCP server pro správu připojení Tungsten TotalAgility a přístupů MCP klientů. Aplikace nabízí React administrační rozhraní, Fastify API, MCP přes Streamable HTTP a `stdio`, audit a SQLite úložiště.
 
-**Verze 0.2.3.** Konektor používá REST API `/services/sdk/v1`, jeho odpověď validace `IsValid` a autorizační hlavičku TTA session ID. Podporuje interní jméno/heslo, alternativní `SYSTEM_SESSION_ID`, read-only nástroje pro joby a aktivity. Zápisové operace, dokumenty, uživatelé, Designer, PostgreSQL, Docker a plné RBAC zůstávají mimo tento release; viz [aktuální rozsah](docs/TTA_CAPABILITIES.md).
+**Verze 0.2.4.** Konektor používá REST API `/services/sdk/v1`, jeho odpověď validace `IsValid` a autorizační hlavičku TTA session ID. Podporuje interní jméno/heslo, alternativní `SYSTEM_SESSION_ID`, read-only nástroje pro joby a aktivity. Zápisové operace, dokumenty, uživatelé, Designer, PostgreSQL, Docker a plné RBAC zůstávají mimo tento release; viz [aktuální rozsah](docs/TTA_CAPABILITIES.md).
 
 ## Rychlý start ve Windows
 
@@ -37,6 +37,8 @@ Pro běžné interní přihlášení vyberte **Interní uživatel a heslo** a za
 Tlačítko **Test REST API** zavolá `POST /users/sessions`, přečte `SessionId` a `LogOnStateType`, poté ověří relaci endpointem `/users/sessions/{sessionId}/validate` a polem `IsValid`. Stav **API ověřeno** potvrzuje autentizaci REST API; oprávnění k jednotlivým jobům a query stále řídí účet v TTA. HTTP 401/403 obvykle značí zamítnuté přihlašovací údaje nebo oprávnění; 404 znamená chybnou základní URL či cestu API.
 
 Chyba „TTA REST API není dosažitelné nebo selhalo ověření TLS/DNS“ nastane ještě před přihlášením a nesouvisí s uživatelským jménem ani session ID. Na Windows `Run-Local.ps1` spouští Node.js s důvěrou k systémovým certifikátům. Interní kořenovou CA nainstalujte do úložiště **Trusted Root Certification Authorities** uživatele nebo počítače, pod kterým server běží; ověřování TLS zůstává zapnuté. Na Linux VM nastavte `NODE_EXTRA_CA_CERTS` na PEM soubor CA v `/etc/tta-mcp-server/server.env`.
+
+Pokud interní CA nelze nainstalovat, otevřete **Upravit připojení** a zapněte **Důvěřovat certifikátu TTA**. Volba vypne ověření řetězce i názvu certifikátu pouze pro dané TTA připojení; TLS šifrování zůstane zapnuté, ale protistrana nebude ověřená. Používejte ji jen v důvěryhodné síti. Preferované řešení je instalace interní kořenové CA. Test připojení nyní rozlišuje chyby TLS, DNS a odmítnutého síťového spojení.
 
 Vytvořte MCP token v **MCP klienti**, přiřaďte mu konkrétní TTA prostředí a expiraci. Token se zobrazí pouze jednou. Do konfigurace vzdáleného MCP klienta vložte URL `https://<vaše-doména>/tta-mcp` a token jako Bearer credential. Nástroje zahrnují přehled jobů přes pojmenované TTA query, detail/stav/historii/proměnné jobů a aktivity/query/workqueue. Viz [TTA capabilities](docs/TTA_CAPABILITIES.md).
 
@@ -75,7 +77,7 @@ Pro `stdio` se nepoužívá vzdálený API token; oprávnění odpovídá lokál
 - Administrační cookie je HttpOnly, SameSite=Strict a na vzdálené instalaci Secure. Mutující administrační API kontroluje Origin.
 - Výchozí síťový bind je loopback; TTA adresa vyžaduje HTTPS, pokud administrátor výslovně nepovolí HTTP.
 - MCP token lze omezit na vybraná prostředí, expirovat a okamžitě revokovat.
-- TTA operace v 0.2.3 jsou pouze read-only a volají konkrétní REST endpointy z allowlistu. Test spojení ověřuje REST login a `IsValid`; neprokazuje automaticky oprávnění pro každé TTA query.
+- TTA operace v 0.2.4 jsou pouze read-only a volají konkrétní REST endpointy z allowlistu. Test spojení ověřuje REST login a `IsValid`; neprokazuje automaticky oprávnění pro každé TTA query.
 - `SYSTEM_SESSION_ID` a TTA heslo se šifrují stejným vault klíčem. Zálohujte databázi a chráněný vault klíč společně.
 
 Podrobnosti: [Architektura](docs/ARCHITECTURE.md), [Konfigurace](docs/CONFIGURATION.md), [Bezpečnost](docs/SECURITY.md), [Windows](docs/INSTALLATION_WINDOWS.md), [Linux](docs/INSTALLATION_LINUX.md), [kompatibilita TTA](docs/TTA_API_COMPATIBILITY.md).
