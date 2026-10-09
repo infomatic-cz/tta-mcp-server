@@ -5,6 +5,13 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$nodeText = (& node --version).Trim()
+if ($LASTEXITCODE -ne 0 -or $nodeText -notmatch '^v(?<major>22|24)\.(?<minor>\d+)\.') {
+    throw 'Node.js 22.15+ or 24 LTS is required. Install the system-wide Node.js LTS release first.'
+}
+if ($Matches.major -eq '22' -and [int]$Matches.minor -lt 15) {
+    throw 'Node.js 22.15+ is required to load trusted certificates from the Windows system store.'
+}
 $buildRoot = 'C:\Temp\TTAMCP-Build'
 $latestReleaseFile = Join-Path $buildRoot 'latest-release.txt'
 $buildScript = Join-Path $PSScriptRoot 'New-Build.ps1'
@@ -51,9 +58,13 @@ try {
 $priorVaultKey = $env:TTA_VAULT_KEY
 $priorDataDir = $env:TTA_DATA_DIR
 $priorPort = $env:TTA_PORT
+$priorNodeOptions = $env:NODE_OPTIONS
 $env:TTA_VAULT_KEY = $clearKey
 $env:TTA_DATA_DIR = $dataDir
 $env:TTA_PORT = if ($env:TTA_PORT) { $env:TTA_PORT } else { '8380' }
+if ($env:NODE_OPTIONS -notmatch '(^|\s)--use-system-ca(\s|$)') {
+    $env:NODE_OPTIONS = (($env:NODE_OPTIONS, '--use-system-ca' | Where-Object { $_ }) -join ' ').Trim()
+}
 $clearKey = $null
 
 try {
@@ -68,4 +79,5 @@ try {
     $env:TTA_VAULT_KEY = $priorVaultKey
     $env:TTA_DATA_DIR = $priorDataDir
     $env:TTA_PORT = $priorPort
+    $env:NODE_OPTIONS = $priorNodeOptions
 }

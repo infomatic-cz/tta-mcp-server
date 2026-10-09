@@ -1,6 +1,6 @@
 # Instalace na Linux VM
 
-Nasazovací skript vytváří systemd službu, ale nepřidává veřejný TLS terminátor. VM potřebuje podporovanou LTS verzi Ubuntu/Debian, systemd a `systemd-creds` 250+, Node.js 22/24 LTS v `/usr/bin/node`, `npm`, `openssl`, `tar`, `runuser`, `useradd`, `install` a SSH. Během nasazení musí mít VM odchozí HTTPS/DNS přístup k npm registry, protože produkční nativní závislosti se instalují přímo na cílovém Linuxu. Aplikace dále potřebuje síťovou cestu k TTA endpointům.
+Nasazovací skript vytváří systemd službu, ale nepřidává veřejný TLS terminátor. VM potřebuje podporovanou LTS verzi Ubuntu/Debian, systemd a `systemd-creds` 250+, Node.js 22.15+/24 LTS v `/usr/bin/node`, `npm`, `openssl`, `tar`, `runuser`, `useradd`, `install` a SSH. Během nasazení musí mít VM odchozí HTTPS/DNS přístup k npm registry, protože produkční nativní závislosti se instalují přímo na cílovém Linuxu. Aplikace dále potřebuje síťovou cestu k TTA endpointům.
 
 ## Nasazení
 

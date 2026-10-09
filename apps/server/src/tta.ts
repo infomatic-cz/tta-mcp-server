@@ -225,7 +225,7 @@ async function restRequest<T = unknown>(row: ConnectionRow, method: RestMethod, 
   const timer = setTimeout(() => controller.abort(), row.timeout_ms);
   const headers: Record<string, string> = {
     accept: "application/json",
-    "user-agent": "TTA-MCP-Server/0.2.2",
+    "user-agent": "TTA-MCP-Server/0.2.3",
   };
   if (options.authorization) headers.authorization = options.authorization;
   if (options.body) headers["content-type"] = "application/json; charset=utf-8";

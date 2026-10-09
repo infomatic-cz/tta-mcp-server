@@ -1,6 +1,6 @@
 # Plán ověřování
 
-Plán vychází z `CODEX_README.md`. Neoznačuje žádnou TTA verzi jako kompatibilní.
+Plán popisuje ověřitelné schopnosti dostupné v aplikaci a dokumentaci. Neoznačuje žádnou TTA verzi jako kompatibilní.
 
 | Oblast | Ověření požadované před produkčním víceuživatelským provozem |
 |---|---|

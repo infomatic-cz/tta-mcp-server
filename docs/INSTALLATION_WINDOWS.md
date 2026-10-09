@@ -4,7 +4,7 @@
 
 - Windows 10/11 x64
 - PowerShell 7.x
-- Node.js 22 nebo 24 LTS a npm
+- Node.js 22.15+ nebo 24 LTS a npm
 - Otevřený HTTPS přístup z počítače ke každé instalaci TTA, kterou chcete zkoumat
 
 ## První spuštění

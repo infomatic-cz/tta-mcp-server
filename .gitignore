@@ -8,3 +8,6 @@ coverage/
 *.sqlite-shm
 *.sqlite-wal
 *.log
+
+# Local work
+Pracovní/

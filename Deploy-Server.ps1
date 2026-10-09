@@ -48,7 +48,7 @@ SERVICE_USER=tta-mcp-server
 for command in node npm systemd-creds openssl tar runuser; do
   command -v "$command" >/dev/null 2>&1 || { echo "Missing required command: $command" >&2; exit 20; }
 done
-node -e 'const major=Number(process.versions.node.split(".")[0]); if (major < 22 || major >= 25) process.exit(1)' || { echo 'Install Node.js 22 or 24 LTS system-wide first.' >&2; exit 21; }
+node -e 'const [major,minor]=process.versions.node.split(".").map(Number); if (!((major===22 && minor>=15) || major===24)) process.exit(1)' || { echo 'Install Node.js 22.15+ or 24 LTS system-wide first.' >&2; exit 21; }
 systemd-creds --version >/dev/null
 install -d -m 0755 "$APP_ROOT/releases"
 install -d -m 0700 "$CONFIG_DIR"

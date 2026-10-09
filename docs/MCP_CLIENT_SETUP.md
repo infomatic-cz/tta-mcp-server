@@ -23,7 +23,7 @@ Spusťte `Run-Local.ps1 -Stdio`. Přesná konfigurace klienta se liší. Obecná
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        "C:\\Users\\pavel\\OneDrive\\Development\\Web\\TTA\\TTA MCP Server\\Run-Local.ps1",
+        "<cesta k projektu v OneDrive>\\Run-Local.ps1",
         "-Stdio"
       ]
     }
@@ -31,7 +31,7 @@ Spusťte `Run-Local.ps1 -Stdio`. Přesná konfigurace klienta se liší. Obecná
 }
 ```
 
-Upravte cestu podle umístění checkoutu. Klient spustí proces pod stejným Windows účtem, který vytvořil DPAPI vault klíč. Proces používá stejnou databázi a připojení jako lokální administrační UI.
+Nahraďte zástupný text cestou k projektu uloženému ve složce OneDrive. Klient spustí proces pod stejným Windows účtem, který vytvořil DPAPI vault klíč. Proces používá stejnou databázi a připojení jako lokální administrační UI.
 
 ## Dostupné nástroje
 
@@ -41,4 +41,4 @@ Upravte cestu podle umístění checkoutu. Klient spustí proces pod stejným Wi
 - `tta_job_details`, `tta_job_state`, `tta_job_history`, `tta_job_events`, `tta_job_variables` — read-only informace o jobu.
 - `tta_activities_query`, `tta_activities_workqueue`, `tta_activities_count` — read-only TTA activity query a workqueue.
 
-Připojení musí být nakonfigurované a otestované v admin konzoli. TTA odpovědi respektují účetní oprávnění. Query názvy před voláním vytvořte v TotalAgility. Zápis, dokumenty, uživatelé, procesní definice a Designer nejsou v 0.2.2 vystavené.
+Připojení musí být nakonfigurované a otestované v admin konzoli. TTA odpovědi respektují účetní oprávnění. Query názvy před voláním vytvořte v TotalAgility. Zápis, dokumenty, uživatelé, procesní definice a Designer nejsou v 0.2.3 vystavené.

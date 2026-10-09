@@ -29,8 +29,11 @@ function Remove-BuildDirectory([string]$Path) {
 }
 
 $nodeText = (& node --version).Trim()
-if ($LASTEXITCODE -ne 0 -or $nodeText -notmatch '^v(22|24)\.') {
-    throw 'Node.js 22 or 24 LTS is required. Install the system-wide Node.js LTS release first.'
+if ($LASTEXITCODE -ne 0 -or $nodeText -notmatch '^v(?<major>22|24)\.(?<minor>\d+)\.') {
+    throw 'Node.js 22.15+ or 24 LTS is required. Install the system-wide Node.js LTS release first.'
+}
+if ($Matches.major -eq '22' -and [int]$Matches.minor -lt 15) {
+    throw 'Node.js 22.15+ is required to load trusted certificates from the Windows system store.'
 }
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) { throw 'npm was not found on PATH.' }
 if (-not (Get-Command tar.exe -ErrorAction SilentlyContinue)) { throw 'Windows tar.exe was not found.' }
@@ -82,7 +85,7 @@ try {
 }
 
 New-Item -ItemType Directory -Path $release -Force | Out-Null
-foreach ($item in @('package.json', 'package-lock.json', 'README.md', 'CHANGELOG.md', 'CODEX_README.md')) {
+foreach ($item in @('package.json', 'package-lock.json', 'README.md', 'CHANGELOG.md')) {
     Copy-Item -LiteralPath (Join-Path $workspace $item) -Destination $release -Force
 }
 foreach ($directory in @('dist', 'docs', 'deploy')) {
@@ -93,7 +96,7 @@ Push-Location $release
 try {
     npm ci --omit=dev --no-audit --no-fund
     if ($LASTEXITCODE -ne 0) { throw 'Could not install production dependencies into the release directory.' }
-    & tar.exe -czf $archive package.json package-lock.json README.md CHANGELOG.md CODEX_README.md dist docs deploy
+    & tar.exe -czf $archive package.json package-lock.json README.md CHANGELOG.md dist docs deploy
     if ($LASTEXITCODE -ne 0) { throw 'Could not create the Linux deployment archive.' }
 } finally {
     Pop-Location

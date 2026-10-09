@@ -1,10 +1,10 @@
 {
   "name": "tta-mcp-server",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=22.12 <25"
+    "node": ">=22.15 <25"
   },
   "scripts": {
     "build": "tsc -p tsconfig.server.json && vite build",

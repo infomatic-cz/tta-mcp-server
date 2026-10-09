@@ -2,6 +2,14 @@
 
 Změny jsou řazeny od nejnovější verze. Projekt používá Semantic Versioning.
 
+## [0.2.3] – 2026-10-09
+
+### Změněno
+- Návody už neobsahují osobní absolutní cesty; umístění projektu popisují obecně jako složku v OneDrive.
+- Původní zadání bylo přesunuto z kořene repozitáře do lokální složky `Pracovní/`, která je ignorována Gitem.
+- Lokální spouštěč používá důvěryhodné CA z úložiště Windows; ověřování TLS se nevypíná. Nápověda SSO rozlišuje uživatelské `UserId` od systémového ID.
+- Aktualizováno číslo verze aplikace a MCP serveru na 0.2.3.
+
 ## [0.2.2] – 2026-10-09
 
 ### Opraveno
