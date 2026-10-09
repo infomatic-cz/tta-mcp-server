@@ -1,0 +1,66 @@
+[CmdletBinding()]
+param(
+    [switch]$Stdio,
+    [switch]$Build
+)
+
+$ErrorActionPreference = 'Stop'
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$buildRoot = 'C:\Temp\TTAMCP-Build'
+$release = Join-Path $buildRoot 'release'
+$entry = Join-Path $release 'dist\server\index.js'
+$buildScript = Join-Path $PSScriptRoot 'New-Build.ps1'
+
+if ($Build -or -not (Test-Path -LiteralPath $entry)) {
+    if ($Stdio) { & $buildScript *> $null } else { & $buildScript }
+    if (-not (Test-Path -LiteralPath $entry)) { throw 'Build did not produce the server entry point.' }
+}
+
+$dataDir = Join-Path $env:LOCALAPPDATA 'TTA MCP Server'
+$keyPath = Join-Path $dataDir 'vault-key.dpapi'
+New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
+
+if (-not (Test-Path -LiteralPath $keyPath)) {
+    $random = [byte[]]::new(32)
+    [Security.Cryptography.RandomNumberGenerator]::Fill($random)
+    $plainKey = [Convert]::ToBase64String($random)
+    [Array]::Clear($random, 0, $random.Length)
+    $secureKey = ConvertTo-SecureString -String $plainKey -AsPlainText -Force
+    $protectedKey = ConvertFrom-SecureString -SecureString $secureKey
+    [IO.File]::WriteAllText($keyPath, $protectedKey, [Text.Encoding]::ASCII)
+    $plainKey = $null
+    $secureKey.Dispose()
+}
+
+$storedKey = [IO.File]::ReadAllText($keyPath, [Text.Encoding]::ASCII)
+$secureStoredKey = ConvertTo-SecureString -String $storedKey
+$pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureStoredKey)
+$clearKey = $null
+try {
+    $clearKey = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
+} finally {
+    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
+    $secureStoredKey.Dispose()
+}
+
+$priorVaultKey = $env:TTA_VAULT_KEY
+$priorDataDir = $env:TTA_DATA_DIR
+$priorPort = $env:TTA_PORT
+$env:TTA_VAULT_KEY = $clearKey
+$env:TTA_DATA_DIR = $dataDir
+$env:TTA_PORT = if ($env:TTA_PORT) { $env:TTA_PORT } else { '8080' }
+$clearKey = $null
+
+try {
+    if ($Stdio) {
+        & node $entry --stdio
+    } else {
+        $url = "http://127.0.0.1:$($env:TTA_PORT)"
+        Write-Output "Server will be available at $url. Open it in your browser after startup."
+        & node $entry
+    }
+} finally {
+    $env:TTA_VAULT_KEY = $priorVaultKey
+    $env:TTA_DATA_DIR = $priorDataDir
+    $env:TTA_PORT = $priorPort
+}

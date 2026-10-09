@@ -1,0 +1,38 @@
+[Unit]
+Description=TTA MCP Server
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=tta-mcp-server
+Group=tta-mcp-server
+WorkingDirectory=/opt/tta-mcp-server/current
+ExecStart=/usr/bin/node /opt/tta-mcp-server/current/dist/server/index.js
+Restart=on-failure
+RestartSec=5
+StateDirectory=tta-mcp-server
+StateDirectoryMode=0750
+UMask=0077
+Environment=NODE_ENV=production
+Environment=TTA_HOST=127.0.0.1
+Environment=TTA_PORT=8080
+Environment=TTA_DATA_DIR=/var/lib/tta-mcp-server
+Environment=TTA_VAULT_KEY_FILE=%d/tta-vault-key
+EnvironmentFile=-/etc/tta-mcp-server/server.env
+LoadCredentialEncrypted=tta-vault-key:/etc/tta-mcp-server/vault-key.cred
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/tta-mcp-server
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
