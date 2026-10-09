@@ -2,6 +2,13 @@
 
 Změny jsou řazeny od nejnovější verze. Projekt používá Semantic Versioning.
 
+## [0.2.5] – 2026-10-09
+
+### Přidáno
+- Test připojení zapisuje do serverové konzole bezpečný výsledek včetně TTA HTTP stavu, diagnostického detailu a stavu důvěry certifikátu.
+- Log neobsahuje TTA adresu, přihlašovací údaje ani session ID.
+- Aktualizováno číslo verze aplikace a MCP serveru na 0.2.5.
+
 ## [0.2.4] – 2026-10-09
 
 ### Přidáno

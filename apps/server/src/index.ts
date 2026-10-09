@@ -59,7 +59,7 @@ if (process.argv.includes("--stdio")) {
       .header("content-security-policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
   });
 
-  app.get("/health/live", async () => ({ status: "ok", version: "0.2.4" }));
+  app.get("/health/live", async () => ({ status: "ok", version: "0.2.5" }));
   app.get("/health/ready", async (_request, reply) => {
     try {
       store.db.prepare("SELECT 1").get();
@@ -198,6 +198,15 @@ if (process.argv.includes("--stdio")) {
     const row = store.db.prepare("SELECT * FROM connections WHERE id=?").get(request.params.id) as ConnectionRow | undefined;
     if (!row) return reply.code(404).send({ error: "Připojení nebylo nalezeno." });
     const result = await probeConnection(store, vault, row);
+    request.log.info({
+      event: "tta.connection.test.result",
+      connectionId: row.id,
+      status: result.status,
+      httpStatus: result.httpStatus,
+      durationMs: result.durationMs,
+      trustInvalidCertificate: Boolean(row.trust_invalid_certificate),
+      detail: result.detail,
+    }, "TTA connection test result");
     store.audit(request.admin?.username ?? "admin", "tta.connection.test", row.id, result.status);
     return { connectionId: row.id, ...result };
   });

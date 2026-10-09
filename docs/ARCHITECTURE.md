@@ -1,6 +1,6 @@
 # Architektura
 
-Verze 0.2.4 zachovává REST klienta představeného v 0.2.1 a volá TTA API podle [Swaggeru konkrétní TTA instance](https://winserver-tta26.im.cz/TotalAgility/swagger/docs/v1). Nejde o plnou implementaci původního pracovního zadání, které se uchovává mimo repozitář.
+Verze 0.2.5 zachovává REST klienta představeného v 0.2.1 a volá TTA API podle [Swaggeru konkrétní TTA instance](https://winserver-tta26.im.cz/TotalAgility/swagger/docs/v1). Nejde o plnou implementaci původního pracovního zadání, které se uchovává mimo repozitář.
 
 ```text
 MCP Streamable HTTP / stdio
