@@ -36,8 +36,9 @@ Upravte cestu podle umístění checkoutu. Klient spustí proces pod stejným Wi
 ## Dostupné nástroje
 
 - `tta_connections_list` — připojení povolená tokenu, bez tajných údajů.
-- `tta_connection_test` — TTA SDK login a validace session pro konkrétní povolené připojení.
-- `tta_processes_list`, `tta_process_details`, `tta_process_help`, `tta_process_states` — read-only procesní metadata.
-- `tta_job_state`, `tta_job_history`, `tta_job_events`, `tta_job_activities` — read-only informace o konkrétním jobu.
+- `tta_connection_test` — TTA REST login a kontrola `IsValid` pro povolené připojení.
+- `tta_jobs_list`, `tta_jobs_count` — čtení jobů přes pojmenované TTA query.
+- `tta_job_details`, `tta_job_state`, `tta_job_history`, `tta_job_events`, `tta_job_variables` — read-only informace o jobu.
+- `tta_activities_query`, `tta_activities_workqueue`, `tta_activities_count` — read-only TTA activity query a workqueue.
 
-Připojení musí být nakonfigurované a otestované v admin konzoli. TTA odpovědi respektují účetní oprávnění. Zápis, dokumenty, uživatelé a Designer nejsou v 0.2.0 vystavené.
+Připojení musí být nakonfigurované a otestované v admin konzoli. TTA odpovědi respektují účetní oprávnění. Query názvy před voláním vytvořte v TotalAgility. Zápis, dokumenty, uživatelé, procesní definice a Designer nejsou v 0.2.1 vystavené.

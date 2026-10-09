@@ -59,7 +59,7 @@ if (process.argv.includes("--stdio")) {
       .header("content-security-policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
   });
 
-  app.get("/health/live", async () => ({ status: "ok", version: "0.2.0" }));
+  app.get("/health/live", async () => ({ status: "ok", version: "0.2.1" }));
   app.get("/health/ready", async (_request, reply) => {
     try {
       store.db.prepare("SELECT 1").get();
@@ -226,16 +226,18 @@ if (process.argv.includes("--stdio")) {
   app.get("/api/audit", async () => store.db.prepare("SELECT id,actor,action,target,result,created_at AS createdAt FROM audit_events ORDER BY created_at DESC LIMIT 200").all());
   app.get("/api/tools", async () => [
     { name: "tta_connections_list", description: "Seznam povolených připojení bez tajných údajů.", risk: "READ", availability: "AVAILABLE" },
-    { name: "tta_connection_test", description: "Ověření přihlášení a SDK JSON relace.", risk: "READ", availability: "AVAILABLE" },
+    { name: "tta_connection_test", description: "Ověření přihlášení a REST API relace.", risk: "READ", availability: "AVAILABLE" },
     ...[
-      ["tta_processes_list", "Seznam procesních definic", "process.read"],
-      ["tta_process_details", "Detail procesní definice", "process.read"],
-      ["tta_process_help", "Text nápovědy procesu", "process.read"],
-      ["tta_process_states", "Stavy procesní definice", "process.read"],
+      ["tta_jobs_list", "Seznam jobů podle TTA query", "job.read"],
+      ["tta_jobs_count", "Počet jobů podle TTA query", "job.read"],
+      ["tta_job_details", "Detail job instance", "job.read"],
       ["tta_job_state", "Stav job instance", "job.read"],
       ["tta_job_history", "Historie job instance", "job.read"],
       ["tta_job_events", "Události job instance", "job.read"],
-      ["tta_job_activities", "Aktivity job instance", "activity.read"],
+      ["tta_job_variables", "Proměnné job instance", "job.read"],
+      ["tta_activities_query", "Aktivity podle TTA query", "activity.read"],
+      ["tta_activities_workqueue", "Fronta práce uživatele", "activity.read"],
+      ["tta_activities_count", "Počet aktivit", "activity.read"],
     ].map(([name, description, capability]) => ({ name, description, risk: "READ", capability, availability: "AVAILABLE_AFTER_TTA_AUTH" })),
   ]);
 

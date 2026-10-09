@@ -10,9 +10,9 @@ const passwordCredentials = z.object({
 });
 const systemSessionCredentials = z.object({
   username: z.string().trim().min(1).max(300),
-  systemSessionId: z.string().min(1).max(4096),
+  systemSessionId: z.string().min(1).max(4096).refine((value) => !/[\r\n]/.test(value), "SYSTEM_SESSION_ID obsahuje nepovolené znaky."),
 });
-const sdkPathSchema = z.string().trim().min(1).max(512).default("/Services/Sdk");
+const apiPathSchema = z.string().trim().min(1).max(512).default("/services/sdk/v1");
 
 export const connectionInput = z.object({
   name: z.string().trim().min(2).max(100),
@@ -21,9 +21,8 @@ export const connectionInput = z.object({
   version: z.string().trim().max(100).optional().default(""),
   enabled: z.boolean().default(true),
   timeoutMs: z.number().int().min(1000).max(60000).default(10000),
-  sdkPath: sdkPathSchema,
+  apiPath: apiPathSchema,
   authMode: z.enum(["PASSWORD", "SYSTEM_SESSION_ID"]).default("PASSWORD"),
-  logonProtocol: z.union([z.literal(5), z.literal(7), z.literal(8)]).default(7),
   credentials: z.union([passwordCredentials, systemSessionCredentials]).optional(),
   clearCredentials: z.boolean().optional().default(false),
 }).superRefine((value, context) => {
@@ -42,18 +41,26 @@ export function normalizeBaseUrl(value: string, allowHttp: boolean): string {
   if (url.protocol !== "https:" && !(allowHttp && url.protocol === "http:")) {
     throw new Error("Adresa TTA musí používat HTTPS. HTTP lze povolit pouze výslovným nastavením TTA_ALLOW_INSECURE_HTTP.");
   }
-  if (url.username || url.password || url.search || url.hash) throw new Error("Adresa nesmí obsahovat uživatelské jméno, heslo, query ani fragment.");
+  if (url.username || url.password || url.search) throw new Error("Adresa nesmí obsahovat uživatelské jméno, heslo ani query.");
   if (!url.hostname) throw new Error("Adresa TTA musí obsahovat název serveru.");
+
+  // Accept the Swagger UI URL pasted from the browser and normalize it to the API root.
+  if (/\/swagger\/ui\/index\/?$/i.test(url.pathname)) {
+    url.pathname = url.pathname.replace(/\/swagger\/ui\/index\/?$/i, "");
+    url.hash = "";
+  } else if (url.hash) {
+    throw new Error("Adresa nesmí obsahovat fragment URL. Vložte kořenovou URL TTA nebo odkaz na její Swagger UI.");
+  }
   url.pathname = url.pathname.replace(/\/+$/, "");
   return url.toString().replace(/\/$/, "");
 }
 
-function normalizeSdkPath(value: string): string {
+function normalizeApiPath(value: string): string {
   const path = value.trim().replace(/\\/g, "/");
   let decoded = path;
-  try { decoded = decodeURIComponent(path); } catch { throw new Error("Cesta SDK obsahuje neplatné kódování."); }
+  try { decoded = decodeURIComponent(path); } catch { throw new Error("Cesta REST API obsahuje neplatné kódování."); }
   if (!path.startsWith("/") || path.startsWith("//") || path.includes("?") || path.includes("#") || decoded.split("/").some((part) => part === "..")) {
-    throw new Error("Cesta TTA SDK musí být absolutní cesta bez query, fragmentu nebo segmentu '..'.");
+    throw new Error("Cesta REST API musí být absolutní cesta bez query, fragmentu nebo segmentu '..'.");
   }
   return path.replace(/\/+$/, "") || "/";
 }
@@ -70,9 +77,8 @@ export function safeConnection(row: ConnectionRow) {
     version: row.tta_version,
     enabled: Boolean(row.enabled),
     timeoutMs: row.timeout_ms,
-    sdkPath: row.sdk_path,
+    apiPath: row.sdk_path,
     authMode: row.auth_mode,
-    logonProtocol: row.logon_protocol,
     credentialsStored: Boolean(row.credential_ciphertext),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -80,7 +86,7 @@ export function safeConnection(row: ConnectionRow) {
     lastStatus: row.last_status,
     lastError: row.last_error,
     capabilities: [
-      { name: "tta.sdk.json", status: apiStatus },
+      { name: "tta.rest.v1", status: apiStatus },
       { name: "tta.auth.session", status: apiStatus },
     ],
   };
@@ -88,7 +94,7 @@ export function safeConnection(row: ConnectionRow) {
 
 export function saveConnection(store: Store, vault: Vault, config: AppConfig, input: ConnectionInput, id?: string): ConnectionRow {
   const baseUrl = normalizeBaseUrl(input.baseUrl, config.allowInsecureTtaHttp);
-  const sdkPath = normalizeSdkPath(input.sdkPath);
+  const apiPath = normalizeApiPath(input.apiPath);
   const now = new Date().toISOString();
   const current = id ? store.db.prepare("SELECT * FROM connections WHERE id = ?").get(id) as ConnectionRow | undefined : undefined;
   if (id && !current) throw new Error("Připojení nebylo nalezeno.");
@@ -106,15 +112,15 @@ export function saveConnection(store: Store, vault: Vault, config: AppConfig, in
   if (current) {
     store.db.prepare(`
       UPDATE connections SET name=?, base_url=?, deployment_type=?, tta_version=?, enabled=?, timeout_ms=?,
-        sdk_path=?, auth_mode=?, logon_protocol=?, credential_ciphertext=?, updated_at=? WHERE id=?
+        sdk_path=?, auth_mode=?, credential_ciphertext=?, updated_at=? WHERE id=?
     `).run(input.name, baseUrl, input.deploymentType, input.version || null, Number(input.enabled), input.timeoutMs,
-      sdkPath, input.authMode, input.logonProtocol, encryptedCredential, now, connectionId);
+      apiPath, input.authMode, encryptedCredential, now, connectionId);
   } else {
     store.db.prepare(`
       INSERT INTO connections(id,name,base_url,deployment_type,tta_version,enabled,timeout_ms,sdk_path,auth_mode,logon_protocol,credential_ciphertext,created_at,updated_at)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+      VALUES(?,?,?,?,?,?,?,?,?,7,?,?,?)
     `).run(connectionId, input.name, baseUrl, input.deploymentType, input.version || null, Number(input.enabled), input.timeoutMs,
-      sdkPath, input.authMode, input.logonProtocol, encryptedCredential, now, now);
+      apiPath, input.authMode, encryptedCredential, now, now);
   }
   invalidateTtaSession(connectionId);
   return store.db.prepare("SELECT * FROM connections WHERE id = ?").get(connectionId) as ConnectionRow;
@@ -126,11 +132,13 @@ export interface ProbeResult {
   httpStatus: number | null;
   durationMs: number;
   detail: string;
-  authenticatedAs?: string;
 }
 
 type JsonObject = Record<string, unknown>;
 type TtaCredentials = z.infer<typeof passwordCredentials> | z.infer<typeof systemSessionCredentials>;
+type RestMethod = "GET" | "POST";
+type QueryValue = string | number | boolean | undefined;
+const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const sessionCache = new Map<string, string>();
 const sessionLocks = new Map<string, Promise<string>>();
 const sessionGenerations = new Map<string, number>();
@@ -159,13 +167,6 @@ function getField(source: unknown, ...names: string[]): unknown {
   return undefined;
 }
 
-function unwrapJson(value: unknown): unknown {
-  const wrapped = getField(value, "d");
-  if (wrapped !== undefined) return wrapped;
-  const result = getField(value, "result");
-  return result !== undefined ? result : value;
-}
-
 function readCredentials(vault: Vault, row: ConnectionRow): TtaCredentials | null {
   if (!row.credential_ciphertext) return null;
   try {
@@ -178,75 +179,100 @@ function readCredentials(vault: Vault, row: ConnectionRow): TtaCredentials | nul
   }
 }
 
-function sdkMethodUrl(row: ConnectionRow, service: string, method: string): string {
-  const base = new URL(row.base_url);
-  const basePath = base.pathname.replace(/\/+$/, "");
-  const sdkPath = normalizeSdkPath(row.sdk_path).replace(/^\/+/, "");
-  base.pathname = `${basePath}/${sdkPath}/${service}.svc/json/${method}`.replace(/\/{2,}/g, "/");
-  base.search = "";
-  base.hash = "";
-  return base.toString();
+function restUrl(row: ConnectionRow, route: string, query: Record<string, QueryValue> = {}): URL {
+  const url = new URL(row.base_url);
+  const basePath = url.pathname.replace(/\/+$/, "");
+  const apiPath = normalizeApiPath(row.sdk_path).replace(/\/+$/, "");
+  url.pathname = `${basePath}${apiPath}/${route.replace(/^\/+/, "")}`.replace(/\/{2,}/g, "/");
+  url.search = "";
+  url.hash = "";
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined) url.searchParams.set(key, String(value));
+  }
+  return url;
 }
 
-async function sdkPost<T = unknown>(row: ConnectionRow, service: string, method: string, parameters: JsonObject): Promise<T> {
-  const url = sdkMethodUrl(row, service, method);
+async function readLimitedBody(response: Response): Promise<string> {
+  const contentLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_RESPONSE_BYTES) {
+    void response.body?.cancel().catch(() => undefined);
+    throw new TtaSdkError("Odpověď TTA překročila limit 2 MB.", response.status);
+  }
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_RESPONSE_BYTES) {
+      await reader.cancel().catch(() => undefined);
+      throw new TtaSdkError("Odpověď TTA překročila limit 2 MB.", response.status);
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  return new TextDecoder().decode(bytes);
+}
+
+async function restRequest<T = unknown>(row: ConnectionRow, method: RestMethod, route: string,
+  options: { query?: Record<string, QueryValue>; body?: JsonObject; authorization?: string; authentication?: boolean } = {}): Promise<T> {
+  const url = restUrl(row, route, options.query);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), row.timeout_ms);
+  const headers: Record<string, string> = {
+    accept: "application/json",
+    "user-agent": "TTA-MCP-Server/0.2.1",
+  };
+  if (options.authorization) headers.authorization = options.authorization;
+  if (options.body) headers["content-type"] = "application/json; charset=utf-8";
   try {
     const response = await fetch(url, {
-      method: "POST",
+      method,
       redirect: "manual",
       signal: controller.signal,
-      headers: { accept: "application/json", "content-type": "application/json; charset=utf-8", "user-agent": "TTA-MCP-Server/0.2.0" },
-      body: JSON.stringify(parameters),
+      headers,
+      ...(options.body ? { body: JSON.stringify(options.body) } : {}),
     });
     if (response.status >= 300 && response.status < 400) {
       void response.body?.cancel().catch(() => undefined);
-      throw new TtaSdkError("TTA SDK vrátil přesměrování; zkontrolujte základní URL a cestu SDK.", response.status);
+      throw new TtaSdkError("TTA REST API vrátilo přesměrování; zkontrolujte základní URL a cestu REST API.", response.status);
     }
     if (!response.ok) {
       void response.body?.cancel().catch(() => undefined);
-      if (response.status === 401 || response.status === 403) throw new TtaSdkError("TTA SDK odmítlo autentizaci nebo oprávnění.", response.status, "AUTH_REJECTED");
-      if (response.status === 404) throw new TtaSdkError("TTA SDK endpoint nebyl nalezen; zkontrolujte základní URL a cestu SDK.", response.status, "SDK_UNAVAILABLE");
-      throw new TtaSdkError(`TTA SDK vrátilo HTTP ${response.status}.`, response.status);
+      if (response.status === 401 || response.status === 403 || (options.authentication && response.status === 400)) {
+        throw new TtaSdkError("TTA REST API odmítlo přihlášení nebo oprávnění.", response.status, "AUTH_REJECTED");
+      }
+      if (response.status === 404) throw new TtaSdkError("TTA REST API endpoint nebyl nalezen; zkontrolujte URL a cestu API.", response.status, "SDK_UNAVAILABLE");
+      throw new TtaSdkError(`TTA REST API vrátilo HTTP ${response.status}.`, response.status);
     }
+    if (response.status === 204) return null as T;
     const contentType = response.headers.get("content-type") ?? "";
-    if (!contentType.toLowerCase().includes("json")) {
-      void response.body?.cancel().catch(() => undefined);
-      throw new TtaSdkError("Odpověď není JSON. Zkontrolujte cestu SDK JSON a přihlašovací stránku TTA.", response.status, "SDK_UNAVAILABLE");
-    }
-    const text = await response.text();
-    if (Buffer.byteLength(text, "utf8") > 2 * 1024 * 1024) throw new TtaSdkError("Odpověď TTA překročila limit 2 MB.", response.status);
-    let parsed: unknown;
-    try { parsed = JSON.parse(text) as unknown; }
-    catch { throw new TtaSdkError("TTA SDK vrátilo neplatný JSON.", response.status, "SDK_UNAVAILABLE"); }
-    const unwrapped = unwrapJson(parsed);
-    const errorMessage = getField(unwrapped, "ExceptionMessage", "exceptionMessage");
-    const errorType = getField(unwrapped, "ExceptionType", "exceptionType", "errorCode", "ErrorCode");
-    if (errorMessage || errorType) {
-      const code = typeof errorType === "string" ? errorType.replace(/[^A-Za-z0-9_.-]/g, "").slice(0, 80) : undefined;
-      throw new TtaSdkError("TTA SDK požadavek selhal" + (code ? ` (${code})` : "."), response.status, code);
-    }
-    return unwrapped as T;
+    const text = await readLimitedBody(response);
+    if (!text) return null as T;
+    if (!contentType.toLowerCase().includes("json")) throw new TtaSdkError("TTA REST API nevrátilo JSON. Zkontrolujte URL API a autentizaci.", response.status, "SDK_UNAVAILABLE");
+    try { return JSON.parse(text) as T; }
+    catch { throw new TtaSdkError("TTA REST API vrátilo neplatný JSON.", response.status, "SDK_UNAVAILABLE"); }
   } catch (error) {
     if (error instanceof TtaSdkError) throw error;
     const timeout = error instanceof Error && error.name === "AbortError";
-    throw new TtaSdkError(timeout ? "Vypršel časový limit požadavku na TTA SDK." : "TTA SDK není dosažitelné nebo selhalo ověření TLS/DNS.");
+    throw new TtaSdkError(timeout ? "Vypršel časový limit požadavku na TTA REST API." : "TTA REST API není dosažitelné nebo selhalo ověření TLS/DNS.");
   } finally {
     clearTimeout(timer);
   }
 }
 
 async function validateTtaSession(row: ConnectionRow, sessionId: string): Promise<boolean> {
-  const validation = await sdkPost(row, "UserService", "ValidateSession", { sessionId });
-  const validatedId = getField(validation, "SessionId", "sessionId");
-  const validFlag = getField(validation, "isValid", "IsValid");
-  return typeof validatedId === "string" && validatedId === sessionId && validFlag !== false && validFlag !== "false";
+  const validation = await restRequest(row, "POST", `users/sessions/${encodeURIComponent(sessionId)}/validate`);
+  return getField(validation, "IsValid", "isValid") === true;
 }
 
 async function acquireTtaSession(vault: Vault, row: ConnectionRow): Promise<string> {
   const credentials = readCredentials(vault, row);
-  if (!credentials) throw new TtaSdkError("Připojení nemá uložené credentials. Nastavte autentizaci a zkuste test znovu.", null, "AUTH_REQUIRED");
+  if (!credentials) throw new TtaSdkError("Připojení nemá uložené údaje. Nastavte autentizaci a zkuste test znovu.", null, "AUTH_REQUIRED");
   const generation = sessionGenerations.get(row.id) ?? 0;
 
   const cached = sessionCache.get(row.id);
@@ -265,47 +291,85 @@ async function acquireTtaSession(vault: Vault, row: ConnectionRow): Promise<stri
   const authentication = (async () => {
     let session: unknown;
     if ("systemSessionId" in credentials) {
-      session = await sdkPost(row, "UserService", "GetSingleSignOnSession", {
-        systemSessionId: credentials.systemSessionId,
-        userIdentity: { UserId: credentials.username, LogOnProtocol: row.logon_protocol },
+      session = await restRequest(row, "POST", "users/sessions/single-sign-on", {
+        authorization: credentials.systemSessionId,
+        body: { UserId: credentials.username },
+        authentication: true,
       });
     } else {
-      session = await sdkPost(row, "UserService", "GetSessionWithPassword", {
-        userIdentity: { UserId: credentials.username, Password: credentials.secret, LogOnProtocol: row.logon_protocol },
+      session = await restRequest(row, "POST", "users/sessions", {
+        body: { UserName: credentials.username, Password: credentials.secret, UnconditionalLogOn: false },
+        authentication: true,
       });
     }
     const sessionId = getField(session, "SessionId", "sessionId");
-    const isValid = getField(session, "isValid", "IsValid");
-    if (typeof sessionId !== "string" || !sessionId || isValid === false || isValid === "false") {
-      throw new TtaSdkError("TTA nepřidělilo platnou relaci. Ověřte uživatele, autentizaci a logon protocol.", null, "AUTH_REJECTED");
+    const loginState = getField(session, "LogOnStateType", "logOnStateType");
+    if (typeof sessionId !== "string" || !sessionId || (loginState !== undefined && Number(loginState) !== 0)) {
+      throw new TtaSdkError("TTA nevrátilo přihlášenou relaci. Ověřte interní účet, heslo nebo SYSTEM_SESSION_ID.", null, "AUTH_REJECTED");
     }
     if (!await validateTtaSession(row, sessionId)) {
-      throw new TtaSdkError("TTA session nebyla platná.", null, "AUTH_REJECTED");
+      throw new TtaSdkError("TTA relace není platná.", null, "AUTH_REJECTED");
     }
     if ((sessionGenerations.get(row.id) ?? 0) === generation) sessionCache.set(row.id, sessionId);
     return sessionId;
   })();
   sessionLocks.set(row.id, authentication);
-  try {
-    return await authentication;
-  } finally {
-    if (sessionLocks.get(row.id) === authentication) sessionLocks.delete(row.id);
-  }
+  try { return await authentication; }
+  finally { if (sessionLocks.get(row.id) === authentication) sessionLocks.delete(row.id); }
 }
 
 export async function withTtaSession<T>(vault: Vault, row: ConnectionRow, run: (sessionId: string) => Promise<T>): Promise<T> {
   return run(await acquireTtaSession(vault, row));
 }
 
-const READ_ONLY_SDK_METHODS: Record<string, ReadonlySet<string>> = {
-  ProcessService: new Set(["GetProcessesSummary", "GetProcessInfo2", "GetProcessHelpText", "GetProcessStatesSummary"]),
-  JobService: new Set(["GetJobState", "GetJobHistory2", "GetJobEvents"]),
-  ActivityService: new Set(["GetActivitiesInJobWithStatus"]),
-};
+function requiredString(parameters: JsonObject, name: string): string {
+  const value = parameters[name];
+  if (typeof value !== "string" || !value || value.includes("/") || value.includes("\\")) throw new TtaSdkError(`Neplatný parametr ${name}.`);
+  return value;
+}
 
-export async function callTtaSdk<T = unknown>(vault: Vault, row: ConnectionRow, service: string, method: string, parameters: JsonObject): Promise<T> {
-  if (!READ_ONLY_SDK_METHODS[service]?.has(method)) throw new TtaSdkError("Tato TTA SDK operace není v read-only katalogu povolena.");
-  return withTtaSession(vault, row, (sessionId) => sdkPost<T>(row, service, method, { ...parameters, sessionId }));
+export async function callTtaApi<T = unknown>(vault: Vault, row: ConnectionRow, operation: string, parameters: JsonObject): Promise<T> {
+  return withTtaSession(vault, row, async (sessionId) => {
+    const authorization = sessionId;
+    switch (operation) {
+      case "jobs.list":
+        return restRequest<T>(row, "GET", "jobs", { query: { queryName: requiredString(parameters, "queryName") }, authorization });
+      case "jobs.count":
+        return restRequest<T>(row, "GET", "jobs/count", { query: { queryName: requiredString(parameters, "queryName") }, authorization });
+      case "job.details":
+        return restRequest<T>(row, "GET", `jobs/${encodeURIComponent(requiredString(parameters, "jobId"))}`, {
+          query: { associatedJobsHistory: parameters.associatedJobsHistory === true }, authorization,
+        });
+      case "job.state":
+        return restRequest<T>(row, "GET", `jobs/${encodeURIComponent(requiredString(parameters, "jobId"))}/state`, { authorization });
+      case "job.history":
+        return restRequest<T>(row, "GET", `jobs/${encodeURIComponent(requiredString(parameters, "jobId"))}/history`, {
+          query: { associatedJobsHistory: parameters.associatedJobsHistory === true }, authorization,
+        });
+      case "job.variables":
+        return restRequest<T>(row, "GET", `jobs/${encodeURIComponent(requiredString(parameters, "jobId"))}/variables`, { authorization });
+      case "job.events": {
+        const details = await restRequest<unknown>(row, "GET", `jobs/${encodeURIComponent(requiredString(parameters, "jobId"))}`, { authorization });
+        return (getField(details, "Events", "events") ?? []) as T;
+      }
+      case "activities.query":
+        return restRequest<T>(row, "GET", `activities/${encodeURIComponent(requiredString(parameters, "queryName"))}`, { authorization });
+      case "activities.workqueue":
+        return restRequest<T>(row, "GET", "activities/workqueue", {
+          query: { queryName: requiredString(parameters, "queryName") }, authorization,
+        });
+      case "activities.count":
+        return restRequest<T>(row, "GET", "activities/count", {
+          query: {
+            queryName: typeof parameters.queryName === "string" ? parameters.queryName : undefined,
+            jobId: typeof parameters.jobId === "string" ? parameters.jobId : undefined,
+            activityStatus: typeof parameters.activityStatus === "number" ? parameters.activityStatus : undefined,
+          }, authorization,
+        });
+      default:
+        throw new TtaSdkError("Tato operace není povolena v read-only katalogu.");
+    }
+  });
 }
 
 export async function probeConnection(store: Store, vault: Vault, row: ConnectionRow): Promise<ProbeResult> {
@@ -314,23 +378,23 @@ export async function probeConnection(store: Store, vault: Vault, row: Connectio
   try {
     const credentials = readCredentials(vault, row);
     if (!credentials) {
-      result = { status: "AUTH_REQUIRED", httpStatus: null, durationMs: Date.now() - start, detail: "TTA SDK zatím nebylo ověřeno. Zadejte interní uživatelské jméno a heslo nebo SYSTEM_SESSION_ID." };
+      result = { status: "AUTH_REQUIRED", httpStatus: null, durationMs: Date.now() - start, detail: "TTA REST API zatím nebylo ověřeno. Zadejte interní uživatelské jméno a heslo nebo SYSTEM_SESSION_ID." };
     } else {
       await withTtaSession(vault, row, async () => undefined);
       result = {
         status: "API_COMPATIBLE",
         httpStatus: 200,
         durationMs: Date.now() - start,
-        detail: "Přihlášení TTA i SDK JSON relace byly ověřeny voláním UserService. API je připravené k použití v mezích oprávnění tohoto účtu.",
+        detail: "Přihlášení přes TTA REST API a platnost relace byly ověřeny. Dostupnost jednotlivých operací závisí na oprávněních účtu.",
       };
     }
   } catch (error) {
-    const sdkError = error instanceof TtaSdkError ? error : new TtaSdkError("Test TTA SDK selhal.");
-    const status: ProbeStatus = sdkError.code === "AUTH_REQUIRED" ? "AUTH_REQUIRED"
-      : sdkError.code === "AUTH_REJECTED" || sdkError.httpStatus === 401 || sdkError.httpStatus === 403 ? "AUTH_REJECTED"
-        : sdkError.code === "SDK_UNAVAILABLE" || sdkError.httpStatus === 404 ? "SDK_UNAVAILABLE"
+    const apiError = error instanceof TtaSdkError ? error : new TtaSdkError("Test TTA REST API selhal.");
+    const status: ProbeStatus = apiError.code === "AUTH_REQUIRED" ? "AUTH_REQUIRED"
+      : apiError.code === "AUTH_REJECTED" || apiError.httpStatus === 401 || apiError.httpStatus === 403 ? "AUTH_REJECTED"
+        : apiError.code === "SDK_UNAVAILABLE" || apiError.httpStatus === 404 ? "SDK_UNAVAILABLE"
           : "UNREACHABLE";
-    result = { status, httpStatus: sdkError.httpStatus, durationMs: Date.now() - start, detail: sdkError.message };
+    result = { status, httpStatus: apiError.httpStatus, durationMs: Date.now() - start, detail: apiError.message };
   }
   const now = new Date().toISOString();
   store.db.prepare("UPDATE connections SET last_checked_at=?, last_status=?, last_error=? WHERE id=?")

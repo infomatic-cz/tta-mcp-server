@@ -61,4 +61,4 @@ Zastavte službu a zálohujte `/var/lib/tta-mcp-server` i `/etc/tta-mcp-server/v
 
 ## Ruční aktualizace
 
-`Deploy-Server.ps1` vytvoří novou release složku a přepne symlink `current`; existující DB a systemd credential zůstávají na místě. Před aktualizací vytvořte zálohu. Databázové rozšíření 0.2.0 je dopředná migrace s `ALTER TABLE`; automatický rollback schématu není implementován.
+`Deploy-Server.ps1` vytvoří novou release složku a přepne symlink `current`; existující DB a systemd credential zůstávají na místě. Před aktualizací vytvořte zálohu. Migrace 0.2.1 převede výchozí cestu starších profilů `/Services/Sdk` na `/services/sdk/v1`; ostatní vlastní cesty zachová. Jde o dopřednou SQLite migraci; automatický rollback schématu není implementován.

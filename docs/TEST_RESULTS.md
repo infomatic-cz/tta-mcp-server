@@ -1,5 +1,12 @@
 # Výsledky ověření
 
+## 0.2.1 (2026-10-09)
+
+- Načtený Swagger UI/OpenAPI v1 z dodané TTA instance potvrdil `basePath: /TotalAgility`, REST cestu `/services/sdk/v1`, login modelem `BasicAuthLogOn` a validační odpověď `UserSessionValidation.IsValid`.
+- `New-Build.ps1` úspěšně dokončil TypeScript kompilaci a Vite produkční build v `C:\Temp\TTAMCP-Build\release-0.2.1-20261009161947666`; vytvořil `C:\Temp\TTAMCP-Build\tta-mcp-server-0.2.1.tgz`.
+- Linux deploy nebyl spuštěn. Přihlášení proti TTA nebylo ověřeno, protože do tohoto prostředí nebyla zadána credentials. Automatizované testy nebyly spuštěny.
+- Build skript už nepřepisuje běžící release; předchozí pokus o přepsání zachytil zamčenou knihovnu `argon2`, proto je každý lokální release časově označen.
+
 ## 0.2.0 (2026-10-09)
 
 - `New-Build.ps1` úspěšně provedl TypeScript kompilaci a Vite produkční build v `C:\Temp\TTAMCP-Build`; vytvořil release a `tta-mcp-server-0.2.0.tgz`.

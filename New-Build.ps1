@@ -5,8 +5,12 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path $PSScriptRoot).Path
 $buildRoot = 'C:\Temp\TTAMCP-Build'
 $workspace = Join-Path $buildRoot 'workspace'
-$release = Join-Path $buildRoot 'release'
-$archive = Join-Path $buildRoot 'tta-mcp-server-0.2.0.tgz'
+$packageInfo = Get-Content -LiteralPath (Join-Path $repoRoot 'package.json') -Raw | ConvertFrom-Json
+$version = [string]$packageInfo.version
+$buildStamp = [DateTime]::UtcNow.ToString('yyyyMMddHHmmssfff')
+$release = Join-Path $buildRoot "release-$version-$buildStamp"
+$archive = Join-Path $buildRoot "tta-mcp-server-$version.tgz"
+$latestRelease = Join-Path $buildRoot 'latest-release.txt'
 
 function Assert-BuildPath([string]$Path) {
     $rootPath = [IO.Path]::GetFullPath($buildRoot).TrimEnd('\') + '\'
@@ -35,7 +39,6 @@ New-Item -ItemType Directory -Path $buildRoot -Force | Out-Null
 $null = Assert-BuildPath $workspace
 $null = Assert-BuildPath $release
 Remove-BuildDirectory $workspace
-Remove-BuildDirectory $release
 if (Test-Path -LiteralPath $archive) {
     $null = Assert-BuildPath $archive
     Remove-Item -LiteralPath $archive -Force
@@ -98,3 +101,4 @@ try {
 
 Write-Output "Build complete: $release"
 Write-Output "Linux VM artifact: $archive"
+[IO.File]::WriteAllText($latestRelease, $release, [Text.Encoding]::UTF8)

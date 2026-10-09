@@ -2,6 +2,26 @@
 
 Změny jsou řazeny od nejnovější verze. Projekt používá Semantic Versioning.
 
+## [0.2.1] – 2026-10-09
+
+### Opraveno
+- Připojení přepnuto z neodpovídajícího WCF SDK JSON endpointu na REST API `/services/sdk/v1` popsané Swaggerem konkrétní TTA instance.
+- Password login nyní posílá `BasicAuthLogOn`; validace relace kontroluje skutečné pole `IsValid` z `UserSessionValidation` místo neexistujícího `SessionId`.
+- SSO požadavek nyní posílá `SYSTEM_SESSION_ID` v hlavičce `Authorization` a `UserId` v těle, jak požaduje Swagger.
+- Read-only job a activity nástroje nyní používají doložené REST GET routy; zavádějící procesní SDK nástroje byly odstraněny.
+- Stávající profily s výchozí `/Services/Sdk` cestou se migrují na `/services/sdk/v1`; ručně nastavené cesty zůstávají zachované.
+- Přijímá se také vložená URL Swagger UI a normalizuje se na kořen TTA aplikace.
+
+### Dokumentace a build
+- Kompatibilita, architektura, nastavení, MCP katalog a návod připojení aktualizovány podle načtené OpenAPI v1 specifikace.
+- Build a deploy PowerShell skripty vytvářejí archiv `tta-mcp-server-0.2.1.tgz` mimo OneDrive.
+- Lokální buildy dostávají jedinečné časově označené release složky, aby přestavba nekolidovala se zamčenými soubory běžícího serveru.
+- Odpovědi jobů redigují i hodnoty proměnných s názvy připomínajícími heslo, token, secret či credential.
+
+### Omezení
+- Swagger/OpenAPI bylo načteno z poskytnuté instance, ale přihlášení a oprávnění nebyla runtime ověřena bez credentials.
+- Zápisové operace z REST API se do MCP nepřidávají; zůstávají nepodporované.
+
 ## [0.2.0] – 2026-10-09
 
 ### Přidáno

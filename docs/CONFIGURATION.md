@@ -16,4 +16,4 @@
 
 Vault klíč musí být base64 kódování přesně 32 náhodných bajtů. Klíč se při startu načte do paměti; procesní kopie proměnné `TTA_VAULT_KEY` se ihned odstraní. Restart se stejným klíčem je nutný k dešifrování existujících TTA credentials.
 
-TTA endpoint, cestu SDK JSON, způsob autentizace (`PASSWORD` nebo `SYSTEM_SESSION_ID`) a logon protocol (5, 7 nebo 8) nastavte pro každé připojení v admin konzoli. Tyto hodnoty se liší podle cílové instance; SYSTEM_SESSION_ID je šifrované tajemství, které se nikdy nevrací do API.
+TTA základní URL, cestu REST API (výchozí `/services/sdk/v1`) a způsob autentizace (`PASSWORD` nebo `SYSTEM_SESSION_ID`) nastavte pro každé připojení v admin konzoli. Pokud Swagger ukazuje `basePath: /TotalAgility`, zahrňte tento kontext do základní URL a ponechte cestu REST API `/services/sdk/v1`. `SYSTEM_SESSION_ID` je šifrované tajemství, které se nikdy nevrací do API; při SSO se předává pouze v autorizační hlavičce TTA.

@@ -6,14 +6,20 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $buildRoot = 'C:\Temp\TTAMCP-Build'
-$release = Join-Path $buildRoot 'release'
-$entry = Join-Path $release 'dist\server\index.js'
+$latestReleaseFile = Join-Path $buildRoot 'latest-release.txt'
 $buildScript = Join-Path $PSScriptRoot 'New-Build.ps1'
 
-if ($Build -or -not (Test-Path -LiteralPath $entry)) {
+if ($Build -or -not (Test-Path -LiteralPath $latestReleaseFile)) {
     if ($Stdio) { & $buildScript *> $null } else { & $buildScript }
-    if (-not (Test-Path -LiteralPath $entry)) { throw 'Build did not produce the server entry point.' }
 }
+
+if (-not (Test-Path -LiteralPath $latestReleaseFile)) { throw 'Build did not write the latest release pointer.' }
+$release = [IO.File]::ReadAllText($latestReleaseFile).Trim()
+$rootPath = [IO.Path]::GetFullPath($buildRoot).TrimEnd('\') + '\'
+$releasePath = [IO.Path]::GetFullPath($release)
+if (-not $releasePath.StartsWith($rootPath, [StringComparison]::OrdinalIgnoreCase)) { throw 'Latest release points outside C:\Temp\TTAMCP-Build.' }
+$entry = Join-Path $releasePath 'dist\server\index.js'
+if (-not (Test-Path -LiteralPath $entry)) { throw 'Build did not produce the server entry point.' }
 
 $dataDir = Join-Path $env:LOCALAPPDATA 'TTA MCP Server'
 $keyPath = Join-Path $dataDir 'vault-key.dpapi'

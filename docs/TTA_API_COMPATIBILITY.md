@@ -1,46 +1,62 @@
 # Kompatibilita TTA API
 
-Tato tabulka shrnuje doložené API kontrakty. Dokumentační shoda nenahrazuje test proti konkrétnímu tenantovi; TTA může omezovat metody i přístupová práva podle instalace, typu nasazení a účtu.
+## Swagger instance uživatele
 
-| Verze | Oficiální API zdroj | Zjištěné autentizační metody | Stav v 0.2.0 |
-|---|---|---|---|
-| 8.0 | [SDK dokumentace 8.0](https://docshield.tungstenautomation.com/KTA/en_US/8.0.0-ivy45l9g96/help/SDK_Documentation/latest/index.html) | `GetSessionWithPassword`, `GetSingleSignOnSession`, `ValidateSession` | Kontrakty UserService jsou zdokumentované; běhově neověřeno. |
-| 8.1 | [SDK UserService 8.1](https://docshield.tungstenautomation.com/KTA/en_US/8.1.0-rmx0b1ux3q/help/SDK_Documentation/latest/class_agility_1_1_sdk_1_1_services_1_1_user_service.html) | Username/password session, system session ID, validace session | Kontrakty UserService jsou zdokumentované; běhově neověřeno. |
-| 2025.2 | [SDK UserService 2025.2](https://docshield.tungstenautomation.com/TotalAgility/en_US/2025.2-b103T2xQ9l/help/SDK_Documentation/latest/class_agility_1_1_sdk_1_1_services_1_1_user_service.html) a [volání SDK přes JSON](https://docshield.tungstenautomation.com/TotalAgility/en_US/2025.2-b103T2xQ9l/help/SDK_Documentation/latest/webservicecallusingjson.html) | `GetSessionWithPassword`, `GetSingleSignOnSession`, `ValidateSession` | JSON POST a autentizační metody zdokumentované; běhově neověřeno. |
-| 2026.1 | [SDK UserService 2026.1](https://docshield.tungstenautomation.com/TotalAgility/en_US/2026.1-sy4i5uG9Tu/help/SDK_Documentation/latest/class_agility_1_1_sdk_1_1_services_1_1_user_service.html) | Username/password session, system session ID, validace session | Kontrakty UserService jsou zdokumentované; běhově neověřeno. |
-| 2026.2 | [SDK UserService 2026.2](https://docshield.tungstenautomation.com/TotalAgility/en_US/2026.2-ru7bs8vbsd/help/SDK_Documentation/latest/class_agility_1_1_sdk_1_1_services_1_1_user_service.html) | Username/password session, system session ID, validace session | Kontrakty UserService jsou zdokumentované; běhově neověřeno. |
-| 2026.3 | [SDK UserService 2026.3](https://docshield.tungstenautomation.com/TotalAgility/en_US/2026.3-xw9na1myhb/help/SDK_Documentation/latest/class_agility_1_1_sdk_1_1_services_1_1_user_service.html) a [SDK přehled](https://docshield.tungstenautomation.com/TotalAgility/en_US/2026.3-xw9na1myhb/help/SDK_Documentation/fullbuild/index.html) | `GetSessionWithPassword`, `GetSingleSignOnSession`, `ValidateSession` | Kontrakty a SDK JSON rozhraní zdokumentované; běhově neověřeno. |
-| 2026.4+ | Zatím bez cílové dokumentace v zadání | Neověřeno | Není deklarována kompatibilita. |
+Konektor 0.2.1 vychází z [TTA REST Swaggeru](https://winserver-tta26.im.cz/TotalAgility/swagger/ui/index#/Job), který uživatel poskytl, a z jeho [OpenAPI v1 JSON](https://winserver-tta26.im.cz/TotalAgility/swagger/docs/v1). Specifikace uvádí `basePath: /TotalAgility`, HTTPS a REST cesty `/services/sdk/v1/...`. Samotný Swagger neuvádí produktovou verzi TTA; název hostitele se za důkaz verze nepovažuje.
 
-## Autentizace
+| Vlastnost | Hodnota z OpenAPI |
+|---|---|
+| Název | Tungsten TotalAgility REST API |
+| Swagger | 2.0, API `v1` |
+| Base path | `/TotalAgility` |
+| Interní přihlášení | `POST /services/sdk/v1/users/sessions` |
+| Validace relace | `POST /services/sdk/v1/users/sessions/{sessionId}/validate` |
+| API jobů | `/services/sdk/v1/jobs/...` |
+| API aktivit | `/services/sdk/v1/activities/...` |
 
-Výchozí režim `PASSWORD` volá `UserService.GetSessionWithPassword` s objektem `UserIdentityWithPassword`. SDK vrátí `Session`; následně se volá `UserService.ValidateSession`. Jméno, heslo i session ID se posílají pouze server-to-server přes SDK JSON POST.
+### Autentizace podle Swaggeru
 
-Režim `SYSTEM_SESSION_ID` volá `UserService.GetSingleSignOnSession(systemSessionId, userIdentity)`. Tato metoda vrací session uživatele pro systémové session ID; uživatelské jméno a logon protocol jsou povinné. `SYSTEM_SESSION_ID` je volitelný vstup SSO, nikoliv požadavek pro běžnou interní username/password autentizaci.
+Interní autentizace posílá JSON objekt `BasicAuthLogOn`:
 
-Logon protocol lze zvolit jako `5` (Designer), `7` (Internet, výchozí) nebo `8` (Transformation IDE). Dokumentace uvádí `7` jako Internet. Cloudové připojení s interním heslem má začít s `7`.
+```json
+{
+  "UserName": "tta-user",
+  "Password": "...",
+  "UnconditionalLogOn": false
+}
+```
 
-Session ID se ukládá jen do paměťové cache procesu, ověřuje se před použitím a zahazuje se při změně či odebrání připojení. Databáze obsahuje jen AES-256-GCM šifrované TTA credentials a nevrací je do admin API.
+Odpověď `UserSession` obsahuje `SessionId` a `LogOnStateType`. Hodnota `0` znamená `LoggedOn`; ostatní stavy, například změna hesla nebo zámek účtu, nejsou považovány za úspěšné přihlášení. Poté se volá validační endpoint. Jeho model `UserSessionValidation` vrací `IsValid`, `ResourceId` a `DisplayName` — **nevrací `SessionId`**. To byla jedna chyba předchozí implementace.
 
-## SDK JSON endpoint
+Pro další chráněné REST operace Swagger vyžaduje hlavičku `Authorization` s TTA session ID. OAuth access token se předává jako `Bearer <token>`. Alternativní SSO metoda je `POST /users/sessions/single-sign-on`: `SYSTEM_SESSION_ID` patří do hlavičky `Authorization` a tělo obsahuje `{ "UserId": "..." }`. Nejde tedy o parametr `systemSessionId` v těle SDK JSON požadavku.
 
-Oficiální ukázka SDK JSON používá HTTP POST, JSON payload podle parametrů metody a cestu ve tvaru `Services/Sdk/UserService.svc/json/LogOnWithPassword2`. Aplikace má výchozí cestu `/Services/Sdk`; cesta je konfigurovatelná, protože cloud a on-premise mohou mít jiný kořen nebo kontextovou cestu. Redirect se nepovoluje.
+### Proč předchozí verze nefungovala
 
-Test připojení prokazuje, že nakonfigurovaný JSON endpoint zvládl získat a ověřit TTA relaci. Neprovádí procesní změny. Test sám neprokazuje přístup ke každé metodě; ten se ověřuje až při volání konkrétního read-only nástroje.
+Verze 0.2.0 posílala požadavky na WCF/SDK JSON adresy jako `/Services/Sdk/UserService.svc/json/GetSessionWithPassword`. Dodaný Swagger popisuje pro tuto instanci REST rozhraní na `/services/sdk/v1/...`. Předchozí validace navíc očekávala `SessionId` z odpovědi validate, zatímco Swaggerův model vrací `IsValid`. Obě chyby jsou opravené v 0.2.1.
 
-## Implementované read-only operace
+### Implementované read-only REST operace
 
-V 0.2.0 je přes SDK JSON povoleno pouze toto omezené allowlist API:
+| MCP nástroj | TTA endpoint | Parametry |
+|---|---|---|
+| `tta_jobs_list` | `GET /jobs` | `queryName` — uložený TTA job query |
+| `tta_jobs_count` | `GET /jobs/count` | `queryName` |
+| `tta_job_details` | `GET /jobs/{jobId}` | `jobId`, volitelně historie přidružených jobů |
+| `tta_job_state` | `GET /jobs/{jobId}/state` | `jobId` |
+| `tta_job_history` | `GET /jobs/{jobId}/history` | `jobId`, volitelně přidružené joby |
+| `tta_job_variables` | `GET /jobs/{jobId}/variables` | `jobId` |
+| `tta_job_events` | `GET /jobs/{jobId}` | Události z vlastnosti `Events` |
+| `tta_activities_query` | `GET /activities/{queryName}` | Uložený TTA activity query |
+| `tta_activities_workqueue` | `GET /activities/workqueue` | `queryName`; TTA uplatní role a dovednosti uživatele |
+| `tta_activities_count` | `GET /activities/count` | `queryName`, `jobId` nebo `activityStatus` |
 
-- `ProcessService.GetProcessesSummary`
-- `ProcessService.GetProcessInfo2` s `processInfoFilter=0` (bez příloh a anotací)
-- `ProcessService.GetProcessHelpText`
-- `ProcessService.GetProcessStatesSummary`
-- `JobService.GetJobState`, `GetJobHistory2`, `GetJobEvents`
-- `ActivityService.GetActivitiesInJobWithStatus`
+Vstupy jsou validované, cesty jsou pevně dané allowlistem, TTA oprávnění zůstávají vynucená cílovým serverem. Odpovědi mají limit 2 MB a výstupy redigují citlivá pole i hodnoty proměnných, jejichž názvy obsahují například `password`, `secret`, `token` nebo `credential`.
 
-SDK odpovědi jsou omezené na 2 MB a před vrácením do MCP se redigují pole s klíči jako `Password`, `Token`, `Credential` a `SessionId`. Neznámé nebo nezdokumentované SDK metody nejsou přes server volatelné.
+Swagger tohoto serveru neobsahuje endpointy pro seznam definic procesů a jejich Designer metadata, proto je konektor již nenabízí pod nesprávnými SDK názvy. REST API obsahuje i write endpointy, ale tento MCP server je nevystavuje.
 
-## Omezení
+## Ostatní požadované verze
 
-Nebylo možné se připojit k uživatelovu cloud tenantovi z tohoto vývojového prostředí, proto není potvrzená konkrétní URL, interní účet ani přístupová práva. Metody dokumentované pro SDK verzí se nesmějí považovat za runtime ověřené. TTA RESTful endpointy KTA 8.x, SOAP, federované přihlášení přes browser/OAuth, Windows integrované přihlášení a zápisové operace nejsou v 0.2.0 implementovány.
+Oficiální SDK dokumentace existuje pro [8.0](https://docshield.tungstenautomation.com/KTA/en_US/8.0.0-ivy45l9g96/help/SDK_Documentation/latest/index.html), [8.1](https://docshield.tungstenautomation.com/KTA/en_US/8.1.0-rmx0b1ux3q/help/SDK_Documentation/latest/index.html), [2025.2](https://docshield.tungstenautomation.com/TotalAgility/en_US/2025.2-b103T2xQ9l/help/SDK_Documentation/latest/index.html), [2026.1](https://docshield.tungstenautomation.com/TotalAgility/en_US/2026.1-sy4i5uG9Tu/help/SDK_Documentation/latest/index.html), [2026.2](https://docshield.tungstenautomation.com/TotalAgility/en_US/2026.2-ru7bs8vbsd/help/SDK_Documentation/latest/index.html) a [2026.3](https://docshield.tungstenautomation.com/TotalAgility/en_US/2026.3-xw9na1myhb/help/SDK_Documentation/latest/index.html). Kontrakty z REST Swaggeru konkrétní instance nelze automaticky prohlásit za shodné se všemi verzemi. Tyto verze zůstávají bez runtime ověření; konfigurace API path umožňuje odlišný prefix, nikoli nekompatibilní API kontrakt.
+
+## Omezení ověření
+
+Swagger JSON na dodané URL byl načten a jeho cesty/modely jsou základem opravy. Přihlášení proti této instalaci nebylo provedeno, protože nebyly poskytnuty přihlašovací údaje — aniž by se ukládaly do kódu nebo konverzace. Úspěšný test 0.2.1 potvrdí REST login a `IsValid`; přístup ke konkrétním jobům a aktivitám je nutné ověřit jejich MCP nástroji pod účtem TTA.

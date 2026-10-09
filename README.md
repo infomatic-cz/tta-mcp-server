@@ -2,7 +2,7 @@
 
 Samostatný MCP server pro správu připojení Tungsten TotalAgility a přístupů MCP klientů. Aplikace nabízí React administrační rozhraní, Fastify API, MCP přes Streamable HTTP a `stdio`, audit a SQLite úložiště.
 
-**Verze 0.2.0 – autentizace TTA SDK JSON a read-only provozní nástroje.** Podporuje interní uživatelské jméno/heslo přes `UserService.GetSessionWithPassword`, alternativní `SYSTEM_SESSION_ID` přes `GetSingleSignOnSession`, ověření session a čtení procesních definic, jobů a aktivit. Zápisové operace, dokumenty, uživatelé, Designer, PostgreSQL, Docker a plné RBAC zůstávají mimo tento release; viz [aktuální rozsah](docs/TTA_CAPABILITIES.md).
+**Verze 0.2.1 – oprava připojení podle TTA REST Swaggeru.** Konektor používá REST API `/services/sdk/v1`, jeho odpověď validace `IsValid` a autorizační hlavičku TTA session ID. Podporuje interní jméno/heslo, alternativní `SYSTEM_SESSION_ID`, read-only nástroje pro joby a aktivity. Zápisové operace, dokumenty, uživatelé, Designer, PostgreSQL, Docker a plné RBAC zůstávají mimo tento release; viz [aktuální rozsah](docs/TTA_CAPABILITIES.md).
 
 ## Rychlý start ve Windows
 
@@ -25,17 +25,17 @@ Další spuštění otevře přihlášení. Aplikaci ukončíte `Ctrl+C` v Power
 .\Run-Local.ps1
 ```
 
-Výstupy jsou v `C:\Temp\TTAMCP-Build\release`; zdrojové soubory v OneDrive se při buildu nemění kromě případného vytvoření `package-lock.json` při úplně prvním buildu. Vývojový frontend lze spustit v druhém okně přes `npm run dev:web` v dočasné zrcadlené složce buildu.
+Výstupy jsou v časově označené složce `C:\Temp\TTAMCP-Build\release-<version>-<build-id>` a build archiv je přímo v `C:\Temp\TTAMCP-Build`. Lokální skript spouští poslední dokončenou verzi; nové sestavení během běhu starší verze ji nepřepisuje. Zdrojové soubory v OneDrive se při buildu nemění kromě případného vytvoření `package-lock.json` při úplně prvním buildu.
 
 ## Připojení TotalAgility
 
-V konzoli otevřete **TTA připojení → Přidat připojení**. Zadejte název, základní HTTPS adresu a typ instalace. Cesta SDK JSON má výchozí hodnotu `/Services/Sdk`; pokud vaše TTA instance používá jinou cestu, upravte ji. On-premise URL s kontextem může vypadat například `https://tta.example/TotalAgility` a cesta SDK se k ní připojí.
+V konzoli otevřete **TTA připojení → Přidat připojení**. Zadejte název, základní HTTPS adresu a typ instalace. Výchozí cesta REST API je `/services/sdk/v1`. Pro Swagger URL `https://tta.example/TotalAgility/swagger/ui/index#/Job` zadejte jako základ `https://tta.example/TotalAgility`; aplikace umí zpracovat i vložený odkaz Swagger UI. Kontext `/TotalAgility` musí být součástí základní adresy.
 
-Pro běžné interní přihlášení vyberte **Interní uživatel a heslo**, zadejte TTA uživatelské jméno a heslo a ponechte logon protocol `7 · Internet`. Uložené tajemství se šifruje AES-256-GCM. `SYSTEM_SESSION_ID` je volitelný režim SSO; není nutný, pokud TTA SDK přijímá interní username/password. Tajemství se nezobrazí znovu, neloguje se a session ID se drží jen v paměti procesu.
+Pro běžné interní přihlášení vyberte **Interní uživatel a heslo** a zadejte TTA uživatelské jméno a heslo. REST login odešle `UserName`, `Password` a `UnconditionalLogOn: false`. `SYSTEM_SESSION_ID` je volitelný režim SSO; předává se TTA v hlavičce `Authorization`, uživatelské jméno v těle požadavku. Uložené tajemství se šifruje AES-256-GCM. Session ID se drží jen v paměti procesu.
 
-Tlačítko **Test SDK** zavolá TTA `UserService`, získá session a ověří ji metodou `ValidateSession`. Stav **API ověřeno** potvrzuje dostupnost nakonfigurovaného SDK JSON endpointu a přihlášení; oprávnění jednotlivých nástrojů se stále řídí účtem v TTA. HTTP 401/403 značí odmítnutou autentizaci nebo oprávnění; 404 obvykle znamená chybnou cestu SDK.
+Tlačítko **Test REST API** zavolá `POST /users/sessions`, přečte `SessionId` a `LogOnStateType`, poté ověří relaci endpointem `/users/sessions/{sessionId}/validate` a polem `IsValid`. Stav **API ověřeno** potvrzuje autentizaci REST API; oprávnění k jednotlivým jobům a query stále řídí účet v TTA. HTTP 401/403 obvykle značí zamítnuté přihlašovací údaje nebo oprávnění; 404 znamená chybnou základní URL či cestu API.
 
-Vytvořte MCP token v **MCP klienti**, přiřaďte mu konkrétní TTA prostředí a expiraci. Token se zobrazí pouze jednou. Do konfigurace vzdáleného MCP klienta vložte URL `https://<vaše-doména>/tta-mcp` a token jako Bearer credential. Dostupné nástroje: `tta_connections_list`, `tta_connection_test`, `tta_processes_list`, `tta_process_details`, `tta_process_help`, `tta_process_states`, `tta_job_state`, `tta_job_history`, `tta_job_events` a `tta_job_activities`. Katalog a nepodporované funkce jsou v [TTA capabilities](docs/TTA_CAPABILITIES.md).
+Vytvořte MCP token v **MCP klienti**, přiřaďte mu konkrétní TTA prostředí a expiraci. Token se zobrazí pouze jednou. Do konfigurace vzdáleného MCP klienta vložte URL `https://<vaše-doména>/tta-mcp` a token jako Bearer credential. Nástroje zahrnují přehled jobů přes pojmenované TTA query, detail/stav/historii/proměnné jobů a aktivity/query/workqueue. Viz [TTA capabilities](docs/TTA_CAPABILITIES.md).
 
 ## Nasazení na Linux VM
 
@@ -72,7 +72,7 @@ Pro `stdio` se nepoužívá vzdálený API token; oprávnění odpovídá lokál
 - Administrační cookie je HttpOnly, SameSite=Strict a na vzdálené instalaci Secure. Mutující administrační API kontroluje Origin.
 - Výchozí síťový bind je loopback; TTA adresa vyžaduje HTTPS, pokud administrátor výslovně nepovolí HTTP.
 - MCP token lze omezit na vybraná prostředí, expirovat a okamžitě revokovat.
-- TTA operace v 0.2.0 jsou pouze read-only a volají pojmenované SDK metody přes JSON POST. Test spojení ověřuje `UserService`; neprokazuje automaticky dostupnost každé read-only metody v konkrétním tenantovi.
+- TTA operace v 0.2.1 jsou pouze read-only a volají konkrétní REST endpointy z allowlistu. Test spojení ověřuje REST login a `IsValid`; neprokazuje automaticky oprávnění pro každé TTA query.
 - `SYSTEM_SESSION_ID` a TTA heslo se šifrují stejným vault klíčem. Zálohujte databázi a chráněný vault klíč společně.
 
 Podrobnosti: [Architektura](docs/ARCHITECTURE.md), [Konfigurace](docs/CONFIGURATION.md), [Bezpečnost](docs/SECURITY.md), [Windows](docs/INSTALLATION_WINDOWS.md), [Linux](docs/INSTALLATION_LINUX.md), [kompatibilita TTA](docs/TTA_API_COMPATIBILITY.md).

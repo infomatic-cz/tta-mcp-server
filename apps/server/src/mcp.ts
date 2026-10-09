@@ -5,7 +5,7 @@ import { z } from "zod/v4";
 import type { Store, ConnectionRow, TokenRow } from "./store.js";
 import type { Vault } from "./vault.js";
 import { digest, newOpaqueToken } from "./security.js";
-import { callTtaSdk, probeConnection, safeConnection, TtaSdkError } from "./tta.js";
+import { callTtaApi, probeConnection, safeConnection, TtaSdkError } from "./tta.js";
 
 interface Grant {
   tokenId: string;
@@ -20,8 +20,11 @@ function safeTtaOutput(value: unknown, depth = 0): unknown {
   if (depth > 20) return "[nested value omitted]";
   if (Array.isArray(value)) return value.slice(0, 500).map((item) => safeTtaOutput(item, depth + 1));
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => {
+    const record = value as Record<string, unknown>;
+    const variableName = [record.DisplayName, record.Name, record.VarId].filter((item) => typeof item === "string").join(" ");
+    return Object.fromEntries(Object.entries(record).map(([key, item]) => {
       if (/password|secret|token|authorization|credential|session.?id|system.?session/i.test(key)) return [key, "[REDACTED]"];
+      if (key.toLowerCase() === "value" && /password|secret|token|credential|session.?id|api.?key/i.test(variableName)) return [key, "[REDACTED]"];
       return [key, safeTtaOutput(item, depth + 1)];
     }));
   }
@@ -29,15 +32,11 @@ function safeTtaOutput(value: unknown, depth = 0): unknown {
   return value;
 }
 
-function processIdentity(id?: string, name?: string, version?: number) {
-  return { ...(id ? { Id: id } : {}), ...(name ? { Name: name } : {}), ...(version !== undefined ? { Version: version } : {}) };
-}
-
 function resultError(error: unknown) {
   const ttaError = error instanceof TtaSdkError ? error : null;
   return {
     code: ttaError?.code ?? "TTA_OPERATION_FAILED",
-    message: ttaError?.message ?? "TTA SDK operace selhala.",
+    message: ttaError?.message ?? "TTA REST operace selhala.",
     ...(ttaError?.httpStatus ? { httpStatus: ttaError.httpStatus } : {}),
   };
 }
@@ -47,7 +46,7 @@ function mayAccess(grant: Grant, id: string): boolean {
 }
 
 function createTools(store: Store, vault: Vault, grant: Grant) {
-  const server = new McpServer({ name: "tta-mcp-server", version: "0.2.0" });
+  const server = new McpServer({ name: "tta-mcp-server", version: "0.2.1" });
   server.registerTool("tta_connections_list", {
     description: "Vrátí pouze TTA připojení povolená tomuto MCP klientovi. Neobsahuje přihlašovací údaje.",
     inputSchema: z.object({}),
@@ -58,7 +57,7 @@ function createTools(store: Store, vault: Vault, grant: Grant) {
   });
 
   server.registerTool("tta_connection_test", {
-    description: "Ověří povolené TTA připojení přihlášením přes SDK JSON a validací session. Nevrací tajné údaje ani session ID.",
+    description: "Ověří povolené TTA připojení autentizací přes REST API a validací relace. Nevrací tajné údaje ani session ID.",
     inputSchema: z.object({ connectionId: z.string().uuid() }),
   }, async ({ connectionId }) => {
     const row = store.db.prepare("SELECT * FROM connections WHERE id=? AND enabled=1").get(connectionId) as ConnectionRow | undefined;
@@ -76,7 +75,7 @@ function createTools(store: Store, vault: Vault, grant: Grant) {
     return row && mayAccess(grant, row.id) ? row : null;
   };
   const registerReadTool = (name: string, description: string, inputSchema: z.ZodType, action: string,
-    select: (input: Record<string, unknown>) => { connectionId: string; service: string; method: string; parameters: Record<string, unknown> }) => {
+    select: (input: Record<string, unknown>) => { connectionId: string; operation: string; parameters: Record<string, unknown> }) => {
     server.registerTool(name, { description, inputSchema }, async (input) => {
       const selected = select(input as Record<string, unknown>);
       const row = connectionForTool(selected.connectionId);
@@ -86,7 +85,7 @@ function createTools(store: Store, vault: Vault, grant: Grant) {
       }
       const start = Date.now();
       try {
-        const result = await callTtaSdk(vault, row, selected.service, selected.method, selected.parameters);
+        const result = await callTtaApi(vault, row, selected.operation, selected.parameters);
         store.audit(`mcp:${grant.tokenId}`, action, selected.connectionId, "SUCCESS");
         return textResult({ connectionId: selected.connectionId, operation: action, durationMs: Date.now() - start, data: safeTtaOutput(result) });
       } catch (error) {
@@ -96,61 +95,61 @@ function createTools(store: Store, vault: Vault, grant: Grant) {
     });
   };
 
-  registerReadTool("tta_processes_list", "Seznam procesních definic dostupných přihlášenému TTA uživateli s právem zobrazit jejich úlohy. Filtr lze omezit typem procesu a kategorií.",
-    z.object({ connectionId: z.string().uuid(), processType: z.enum(["BUSINESS_PROCESS", "CASE_DEFINITION", "CASE_FRAGMENT"]).optional(), categoryName: z.string().trim().min(1).max(200).optional() }),
-    "tta.process.list", (input) => {
-      const types: Record<string, number> = { BUSINESS_PROCESS: 0, CASE_DEFINITION: 1, CASE_FRAGMENT: 2 };
-      const processType = input.processType as string | undefined;
-      return { connectionId: input.connectionId as string, service: "ProcessService", method: "GetProcessesSummary", parameters: {
-        processesSummaryFilter: {
-          AccessType: 9,
-          ...(processType ? { UseProcessType: true, ProcessType: types[processType] } : { UseProcessType: false }),
-          ...(input.categoryName ? { Category: { Name: input.categoryName } } : {}),
-        },
-      } };
-    });
-
-  const identitySchema = z.object({ connectionId: z.string().uuid(), processId: z.string().trim().min(1).max(200).optional(), processName: z.string().trim().min(1).max(200).optional(), version: z.number().positive().optional() })
-    .refine((value) => Boolean(value.processId || value.processName), "Zadejte processId nebo processName.");
-  registerReadTool("tta_process_details", "Vrátí metadata procesní definice (bez příloh a anotací) přes dokumentovanou ProcessService.GetProcessInfo2.",
-    identitySchema, "tta.process.details", (input) => ({
-      connectionId: input.connectionId as string, service: "ProcessService", method: "GetProcessInfo2",
-      parameters: { processIdentity: processIdentity(input.processId as string | undefined, input.processName as string | undefined, input.version as number | undefined), processInfoFilter: 0 },
+  registerReadTool("tta_jobs_list", "Vyhledá TTA joby pomocí názvu dotazu (query) nakonfigurovaného v TotalAgility.",
+    z.object({ connectionId: z.string().uuid(), queryName: z.string().trim().min(1).max(200) }), "tta.jobs.list", (input) => ({
+      connectionId: input.connectionId as string, operation: "jobs.list", parameters: { queryName: input.queryName as string },
     }));
 
-  registerReadTool("tta_process_help", "Vrátí text nápovědy publikovaný v konfiguraci procesní definice.",
-    identitySchema, "tta.process.help", (input) => ({
-      connectionId: input.connectionId as string, service: "ProcessService", method: "GetProcessHelpText",
-      parameters: { processIdentity: processIdentity(input.processId as string | undefined, input.processName as string | undefined, input.version as number | undefined) },
+  registerReadTool("tta_jobs_count", "Vrátí počet jobů pro TTA query nakonfigurovaný v TotalAgility.",
+    z.object({ connectionId: z.string().uuid(), queryName: z.string().trim().min(1).max(200) }), "tta.jobs.count", (input) => ({
+      connectionId: input.connectionId as string, operation: "jobs.count", parameters: { queryName: input.queryName as string },
     }));
 
-  registerReadTool("tta_process_states", "Vrátí stavové uzly definované v procesní mapě.",
-    identitySchema, "tta.process.states", (input) => ({
-      connectionId: input.connectionId as string, service: "ProcessService", method: "GetProcessStatesSummary",
-      parameters: { processIdentity: processIdentity(input.processId as string | undefined, input.processName as string | undefined, input.version as number | undefined) },
+  const jobIdSchema = z.object({ connectionId: z.string().uuid(), jobId: z.string().trim().min(1).max(200) });
+  registerReadTool("tta_job_details", "Vrátí vlastnosti job instance včetně dostupných proměnných, událostí a historie.",
+    jobIdSchema.extend({ associatedJobsHistory: z.boolean().default(false) }), "tta.job.details", (input) => ({
+      connectionId: input.connectionId as string, operation: "job.details", parameters: { jobId: input.jobId as string, associatedJobsHistory: input.associatedJobsHistory as boolean },
     }));
 
-  registerReadTool("tta_job_state", "Vrátí aktuální stav jedné běžící nebo dokončené TTA job instance.",
-    z.object({ connectionId: z.string().uuid(), jobId: z.string().trim().min(1).max(200) }), "tta.job.state", (input) => ({
-      connectionId: input.connectionId as string, service: "JobService", method: "GetJobState", parameters: { jobIdentity: { Id: input.jobId } },
+  registerReadTool("tta_job_state", "Vrátí stav konkrétní TTA job instance.",
+    jobIdSchema, "tta.job.state", (input) => ({
+      connectionId: input.connectionId as string, operation: "job.state", parameters: { jobId: input.jobId as string },
     }));
 
-  registerReadTool("tta_job_history", "Vrátí historii jedné TTA job instance; associatedJobs lze zapnout pro přidružené joby.",
-    z.object({ connectionId: z.string().uuid(), jobId: z.string().trim().min(1).max(200), associatedJobs: z.boolean().default(false) }), "tta.job.history", (input) => ({
-      connectionId: input.connectionId as string, service: "JobService", method: "GetJobHistory2",
-      parameters: { jobIdentity: { Id: input.jobId }, jobHistoryFilter: { AssociatedJobs: input.associatedJobs } },
+  registerReadTool("tta_job_history", "Vrátí historii TTA job instance; lze zahrnout i historii přidružených jobů.",
+    jobIdSchema.extend({ associatedJobsHistory: z.boolean().default(false) }), "tta.job.history", (input) => ({
+      connectionId: input.connectionId as string, operation: "job.history", parameters: { jobId: input.jobId as string, associatedJobsHistory: input.associatedJobsHistory as boolean },
     }));
 
-  registerReadTool("tta_job_events", "Vrátí procesní události zadané TTA job instance.",
-    z.object({ connectionId: z.string().uuid(), jobId: z.string().trim().min(1).max(200) }), "tta.job.events", (input) => ({
-      connectionId: input.connectionId as string, service: "JobService", method: "GetJobEvents", parameters: { jobIdentity: { Id: input.jobId } },
+  registerReadTool("tta_job_variables", "Vrátí kolekci proměnných konkrétní TTA job instance.",
+    jobIdSchema, "tta.job.variables", (input) => ({
+      connectionId: input.connectionId as string, operation: "job.variables", parameters: { jobId: input.jobId as string },
     }));
 
-  registerReadTool("tta_job_activities", "Vrátí aktivity jedné TTA job instance pro stav 0 pending, 1 taken, 2 offered, 3 suspended, 4 locked, 5 pending completion, 7 on hold, 8 awaiting event, 9 awaiting allocation, 10 saved, 128 live, 129 history, 130 evaluation failed nebo 131 completed.",
-    z.object({ connectionId: z.string().uuid(), jobId: z.string().trim().min(1).max(200), activityStatus: z.number().int().refine((value) => [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 128, 129, 130, 131].includes(value), "Nepodporovaný stav aktivity.") }),
-    "tta.activity.list", (input) => ({
-      connectionId: input.connectionId as string, service: "ActivityService", method: "GetActivitiesInJobWithStatus",
-      parameters: { jobIdentity: { Id: input.jobId }, liveActivityStatus: input.activityStatus },
+  registerReadTool("tta_job_events", "Vrátí události připojené ke konkrétní TTA job instanci.",
+    jobIdSchema, "tta.job.events", (input) => ({
+      connectionId: input.connectionId as string, operation: "job.events", parameters: { jobId: input.jobId as string },
+    }));
+
+  registerReadTool("tta_activities_query", "Vrátí aktivity podle pojmenovaného TTA dotazu.",
+    z.object({ connectionId: z.string().uuid(), queryName: z.string().trim().min(1).max(200) }), "tta.activities.query", (input) => ({
+      connectionId: input.connectionId as string, operation: "activities.query", parameters: { queryName: input.queryName as string },
+    }));
+
+  registerReadTool("tta_activities_workqueue", "Vrátí položky fronty práce dostupné přihlášenému TTA uživateli podle query; výsledky respektují jeho dovednosti a oprávnění.",
+    z.object({ connectionId: z.string().uuid(), queryName: z.string().trim().min(1).max(200) }), "tta.activities.workqueue", (input) => ({
+      connectionId: input.connectionId as string, operation: "activities.workqueue", parameters: { queryName: input.queryName as string },
+    }));
+
+  registerReadTool("tta_activities_count", "Vrátí počet aktivit podle TTA query, job ID nebo stavu.",
+    z.object({ connectionId: z.string().uuid(), queryName: z.string().trim().min(1).max(200).optional(), jobId: z.string().trim().min(1).max(200).optional(), activityStatus: z.number().int().optional() })
+      .refine((input) => Boolean(input.queryName || input.jobId || input.activityStatus !== undefined), "Zadejte queryName, jobId nebo activityStatus."),
+    "tta.activities.count", (input) => ({
+      connectionId: input.connectionId as string, operation: "activities.count", parameters: {
+        ...(typeof input.queryName === "string" ? { queryName: input.queryName } : {}),
+        ...(typeof input.jobId === "string" ? { jobId: input.jobId } : {}),
+        ...(typeof input.activityStatus === "number" ? { activityStatus: input.activityStatus } : {}),
+      },
     }));
   return server;
 }

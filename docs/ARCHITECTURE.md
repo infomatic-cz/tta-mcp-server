@@ -1,13 +1,13 @@
 # Architektura
 
-Verze 0.2.0 přidává sdílený TTA SDK JSON klient, dva způsoby získání session a omezený read-only katalog. Není to plná implementace všech funkcí z `CODEX_README.md`.
+Verze 0.2.1 nahrazuje předchozí volání SDK JSON/WCF kontraktu klientem REST podle [Swaggeru konkrétní TTA instance](https://winserver-tta26.im.cz/TotalAgility/swagger/docs/v1). Není to plná implementace všech funkcí z `CODEX_README.md`.
 
 ```text
 MCP Streamable HTTP / stdio
           │
           ├─ MCP token → připojovací scope
-          ├─ read-only nástroj allowlist
-          └─ audit bez vstupních secrets
+          ├─ read-only nástroje s pevným REST allowlistem
+          └─ audit bez vstupních tajemství
                     │
 React UI ──> Fastify admin API
                     │
@@ -15,26 +15,28 @@ React UI ──> Fastify admin API
                     ├─ Argon2id admin password hashes
                     └─ AES-256-GCM TTA credential vault
                               │
-                              └─ TTA SDK JSON POST
-                                    ├─ UserService session
+                              └─ TTA REST API /services/sdk/v1
+                                    ├─ User session login / SSO
                                     ├─ session cache in-memory
-                                    └─ ProcessService / JobService / ActivityService
+                                    └─ Job / Activity GET endpoints
 ```
 
 ## Autentizace a relace
 
-- Interní username/password používá `UserService.GetSessionWithPassword`.
-- SSO/system session používá `GetSingleSignOnSession(systemSessionId, userIdentity)`.
-- Oba režimy validují získanou relaci pomocí `ValidateSession`.
-- Session ID zůstává pouze v paměťové cache procesu a při změně profilu se odstraní.
-- TTA oprávnění dále vynucuje samotná TTA instalace pro použitý účet.
+- Interní uživatel/heslo: `POST /users/sessions` s modelem `BasicAuthLogOn` (`UserName`, `Password`, `UnconditionalLogOn: false`).
+- SSO: `POST /users/sessions/single-sign-on`; systémová session se předává v `Authorization`, tělo obsahuje `UserId`.
+- Relace se ověřuje `POST /users/sessions/{sessionId}/validate`; odpověď se kontroluje přes `IsValid`.
+- TTA session ID se posílá v hlavičce `Authorization` pro další REST volání, ukládá se jen v paměti a při změně profilu se zahodí.
+- TTA vynucuje vlastní oprávnění pro joby a activity query.
 
-## Síťová vrstva
+## REST síťová vrstva
 
-SDK JSON volání jsou HTTP POST s JSON payloadem podle oficiálního kontraktu metody. Cesta SDK je konfigurovatelná; výchozí `/Services/Sdk` se připojí k základní URL. Přesměrování se odmítá, každé volání má timeout podle připojení a odpověď má limit 2 MB. Není zde obecný HTTP proxy ani volání libovolné TTA SDK metody: `callTtaSdk` kontroluje allowlist.
+Výchozí API cesta je `/services/sdk/v1`; kontext například `/TotalAgility` patří do základní URL. HTTP přesměrování se odmítá, každý požadavek má timeout profilu a odpověď limit 2 MB. MCP volá pouze konkrétní GET endpointy v `callTtaApi`; obecná HTTP proxy ani libovolné REST požadavky nejsou dostupné.
+
+Starší profily s výchozí cestou `/Services/Sdk` se při upgradu převedou na `/services/sdk/v1`; jiné ručně nastavené cesty se zachovají.
 
 ## Datové hranice a limity
 
-SQLite DB zůstává mimo zdrojový repozitář. TTA credentials jsou šifrované AES-256-GCM; session ID se do SQLite nezapisuje. MCP tokeny jsou omezené na připojení, ale současná verze nemá token scope na jednotlivé read-only nástroje.
+SQLite DB zůstává mimo zdrojový repozitář. TTA credentials jsou šifrované AES-256-GCM; session ID se do SQLite nezapisuje. Výstupy TTA redigují citlivá pole a známé citlivé job variable hodnoty. MCP tokeny jsou omezené na připojení, ale nemají scope na jednotlivé nástroje.
 
-V 0.2.0 chybí plné RBAC, správa dalších konzolových uživatelů, PostgreSQL, Docker, MCP Resources/Prompts, TTA write operace, dokumentové API, TTA user/group API, Designer a administrativa. Tyto položky zůstávají v capability registry jako `UNSUPPORTED`.
+Plné RBAC, více konzolových uživatelů, PostgreSQL, Docker, MCP Resources/Prompts, TTA write operace, dokumentové API, definice procesů, TTA user/group API, Designer a administrace zůstávají nepodporované.

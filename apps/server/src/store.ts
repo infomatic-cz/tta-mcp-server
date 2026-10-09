@@ -84,7 +84,7 @@ export class Store {
         tta_version TEXT,
         enabled INTEGER NOT NULL DEFAULT 1,
         timeout_ms INTEGER NOT NULL DEFAULT 10000,
-        sdk_path TEXT NOT NULL DEFAULT '/Services/Sdk',
+        sdk_path TEXT NOT NULL DEFAULT '/services/sdk/v1',
         auth_mode TEXT NOT NULL DEFAULT 'PASSWORD',
         logon_protocol INTEGER NOT NULL DEFAULT 7,
         credential_ciphertext TEXT,
@@ -117,13 +117,20 @@ export class Store {
     `);
     const connectionColumns = this.db.prepare("PRAGMA table_info(connections)").all() as Array<{ name: string }>;
     if (!connectionColumns.some((column) => column.name === "sdk_path")) {
-      this.db.exec("ALTER TABLE connections ADD COLUMN sdk_path TEXT NOT NULL DEFAULT '/Services/Sdk'");
+      this.db.exec("ALTER TABLE connections ADD COLUMN sdk_path TEXT NOT NULL DEFAULT '/services/sdk/v1'");
     }
     if (!connectionColumns.some((column) => column.name === "auth_mode")) {
       this.db.exec("ALTER TABLE connections ADD COLUMN auth_mode TEXT NOT NULL DEFAULT 'PASSWORD'");
     }
     if (!connectionColumns.some((column) => column.name === "logon_protocol")) {
       this.db.exec("ALTER TABLE connections ADD COLUMN logon_protocol INTEGER NOT NULL DEFAULT 7");
+    }
+    const migrationVersion = Number(this.db.pragma("user_version", { simple: true }) ?? 0);
+    if (migrationVersion < 1) {
+      this.db.exec(`UPDATE connections
+        SET sdk_path=CASE WHEN lower(rtrim(sdk_path,'/'))='/services/sdk' THEN '/services/sdk/v1' ELSE sdk_path END,
+            last_checked_at=NULL, last_status=NULL, last_error=NULL`);
+      this.db.pragma("user_version = 1");
     }
     if (process.platform !== "win32") chmodSync(config.dbPath, 0o600);
   }
