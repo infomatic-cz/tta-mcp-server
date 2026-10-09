@@ -6,7 +6,7 @@ $repoRoot = (Resolve-Path $PSScriptRoot).Path
 $buildRoot = 'C:\Temp\TTAMCP-Build'
 $workspace = Join-Path $buildRoot 'workspace'
 $release = Join-Path $buildRoot 'release'
-$archive = Join-Path $buildRoot 'tta-mcp-server-0.1.2.tgz'
+$archive = Join-Path $buildRoot 'tta-mcp-server-0.2.0.tgz'
 
 function Assert-BuildPath([string]$Path) {
     $rootPath = [IO.Path]::GetFullPath($buildRoot).TrimEnd('\') + '\'

@@ -36,6 +36,8 @@ Upravte cestu podle umístění checkoutu. Klient spustí proces pod stejným Wi
 ## Dostupné nástroje
 
 - `tta_connections_list` — připojení povolená tokenu, bez tajných údajů.
-- `tta_connection_test` — HTTP GET test dosažitelnosti konkrétního povoleného připojení.
+- `tta_connection_test` — TTA SDK login a validace session pro konkrétní povolené připojení.
+- `tta_processes_list`, `tta_process_details`, `tta_process_help`, `tta_process_states` — read-only procesní metadata.
+- `tta_job_state`, `tta_job_history`, `tta_job_events`, `tta_job_activities` — read-only informace o konkrétním jobu.
 
-Nástroje pro procesy/úlohy/dokumenty nejsou zatím nabízeny jako funkční operace.
+Připojení musí být nakonfigurované a otestované v admin konzoli. TTA odpovědi respektují účetní oprávnění. Zápis, dokumenty, uživatelé a Designer nejsou v 0.2.0 vystavené.

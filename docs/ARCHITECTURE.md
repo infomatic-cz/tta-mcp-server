@@ -1,37 +1,40 @@
 # Architektura
 
-Verze 0.1.2 je první dokončená technická etapa, nikoliv plná integrace TotalAgility.
+Verze 0.2.0 přidává sdílený TTA SDK JSON klient, dva způsoby získání session a omezený read-only katalog. Není to plná implementace všech funkcí z `CODEX_README.md`.
 
 ```text
-React UI ──same-origin──> Fastify admin API ──> SQLite
-                                  │                 ├─ password hashes
-                                  │                 ├─ hashed sessions/tokens
-                                  │                 ├─ encrypted TTA credentials
-                                  │                 └─ audit events
-                                  ├─ AES-256-GCM vault key (runtime only)
-                                  └─ MCP Streamable HTTP / stdio
-                                           │
-                                           └─ TTA HTTP reachability probe
+MCP Streamable HTTP / stdio
+          │
+          ├─ MCP token → připojovací scope
+          ├─ read-only nástroj allowlist
+          └─ audit bez vstupních secrets
+                    │
+React UI ──> Fastify admin API
+                    │
+                    ├─ SQLite profiles, sessions, tokens, audit
+                    ├─ Argon2id admin password hashes
+                    └─ AES-256-GCM TTA credential vault
+                              │
+                              └─ TTA SDK JSON POST
+                                    ├─ UserService session
+                                    ├─ session cache in-memory
+                                    └─ ProcessService / JobService / ActivityService
 ```
 
-## Stack
+## Autentizace a relace
 
-- Node.js 22/24 LTS, TypeScript strict mode, Fastify 5.
-- React 19 + Vite 8; produkční UI se kompiluje do `dist/web` a obsluhuje jej Fastify.
-- Oficiální TypeScript MCP SDK v2, Streamable HTTP přes `createMcpHandler` a lokální `stdio` transport.
-- SQLite přes `better-sqlite3`, s WAL, foreign keys a busy timeout. Databáze je mimo repozitář.
-- Argon2id pro hesla; AES-256-GCM pro tajné hodnoty TTA; SHA-256 digest pro náhodné sessions/MCP tokeny.
+- Interní username/password používá `UserService.GetSessionWithPassword`.
+- SSO/system session používá `GetSingleSignOnSession(systemSessionId, userIdentity)`.
+- Oba režimy validují získanou relaci pomocí `ValidateSession`.
+- Session ID zůstává pouze v paměťové cache procesu a při změně profilu se odstraní.
+- TTA oprávnění dále vynucuje samotná TTA instalace pro použitý účet.
 
-## Datové hranice
+## Síťová vrstva
 
-TTA profily a audit ukládá Fastify vrstva. MCP volání používá stejný profil a autorizační pravidla; každý vzdálený token má explicitní seznam povolených ID připojení. TTA API adaptér zatím neexistuje. Jediný síťový dotaz je administrátorem vyvolaný HTTP GET bez přihlašovacích údajů a bez následování redirectů.
+SDK JSON volání jsou HTTP POST s JSON payloadem podle oficiálního kontraktu metody. Cesta SDK je konfigurovatelná; výchozí `/Services/Sdk` se připojí k základní URL. Přesměrování se odmítá, každé volání má timeout podle připojení a odpověď má limit 2 MB. Není zde obecný HTTP proxy ani volání libovolné TTA SDK metody: `callTtaSdk` kontroluje allowlist.
 
-## Provoz
+## Datové hranice a limity
 
-Lokální proces naslouchá na `127.0.0.1`. Vzdálený proces také naslouchá pouze na loopbacku a je dostupný přes TLS reverse proxy. systemd zprostředkuje odemčený vault klíč jako runtime credential. Výpadek jednoho TTA serveru nezastaví administrační server.
+SQLite DB zůstává mimo zdrojový repozitář. TTA credentials jsou šifrované AES-256-GCM; session ID se do SQLite nezapisuje. MCP tokeny jsou omezené na připojení, ale současná verze nemá token scope na jednotlivé read-only nástroje.
 
-## Rozhodnutí, která je nutné rozšířit
-
-- Ověřit oficiální SDK JSON/SOAP/REST kontrakty pro cílové verze; pak přidat `TtaAdapter` a capability registry.
-- Přidat skutečné víceuživatelské role a delegaci připojení. 0.1.2 obsahuje jen systémového správce a omezení vzdálených MCP tokenů.
-- Přidat PostgreSQL, migrace, zálohy/obnovu, monitoring a testovací sadu před produkčním víceinstančním provozem.
+V 0.2.0 chybí plné RBAC, správa dalších konzolových uživatelů, PostgreSQL, Docker, MCP Resources/Prompts, TTA write operace, dokumentové API, TTA user/group API, Designer a administrativa. Tyto položky zůstávají v capability registry jako `UNSUPPORTED`.

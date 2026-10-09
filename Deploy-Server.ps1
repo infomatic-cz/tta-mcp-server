@@ -12,7 +12,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $buildRoot = 'C:\Temp\TTAMCP-Build'
-$artifact = Join-Path $buildRoot 'tta-mcp-server-0.1.2.tgz'
+$artifact = Join-Path $buildRoot 'tta-mcp-server-0.2.0.tgz'
 $buildScript = Join-Path $PSScriptRoot 'New-Build.ps1'
 
 if ($PublicOrigin) {
@@ -29,7 +29,7 @@ foreach ($toolName in @('ssh.exe', 'scp.exe')) {
 if (-not (Test-Path -LiteralPath $artifact)) { throw "Build artifact not found: $artifact" }
 
 $target = "$User@$Server"
-$remoteArtifact = '/tmp/tta-mcp-server-0.1.2.tgz'
+$remoteArtifact = '/tmp/tta-mcp-server-0.2.0.tgz'
 & scp.exe $artifact "${target}:$remoteArtifact"
 if ($LASTEXITCODE -ne 0) { throw 'Could not copy the build archive to the VM.' }
 
@@ -37,7 +37,7 @@ $originValue = if ($PublicOrigin) { $PublicOrigin } else { '' }
 $remoteInstall = @'
 set -euo pipefail
 PUBLIC_ORIGIN="$1"
-ARCHIVE=/tmp/tta-mcp-server-0.1.2.tgz
+ARCHIVE=/tmp/tta-mcp-server-0.2.0.tgz
 APP_ROOT=/opt/tta-mcp-server
 CONFIG_DIR=/etc/tta-mcp-server
 DATA_DIR=/var/lib/tta-mcp-server

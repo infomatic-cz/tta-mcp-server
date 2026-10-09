@@ -15,3 +15,5 @@
 | `LOG_LEVEL` | `info` | Úroveň Pino logování. |
 
 Vault klíč musí být base64 kódování přesně 32 náhodných bajtů. Klíč se při startu načte do paměti; procesní kopie proměnné `TTA_VAULT_KEY` se ihned odstraní. Restart se stejným klíčem je nutný k dešifrování existujících TTA credentials.
+
+TTA endpoint, cestu SDK JSON, způsob autentizace (`PASSWORD` nebo `SYSTEM_SESSION_ID`) a logon protocol (5, 7 nebo 8) nastavte pro každé připojení v admin konzoli. Tyto hodnoty se liší podle cílové instance; SYSTEM_SESSION_ID je šifrované tajemství, které se nikdy nevrací do API.

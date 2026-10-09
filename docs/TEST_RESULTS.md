@@ -1,5 +1,12 @@
 # Výsledky ověření
 
+## 0.2.0 (2026-10-09)
+
+- `New-Build.ps1` úspěšně provedl TypeScript kompilaci a Vite produkční build v `C:\Temp\TTAMCP-Build`; vytvořil release a `tta-mcp-server-0.2.0.tgz`.
+- Kompilace zahrnovala TTA SDK JSON autentizaci, read-only MCP operace a administrační UI.
+- Skutečný TTA tenant nebyl z tohoto prostředí dostupný; cloudová URL, credentials, práva a jednotlivé SDK metody proto nebyly runtime ověřeny.
+- Linux VM nebyla nasazena. Automatizovaná testovací sada v repozitáři zatím není.
+
 ## 0.1.2 (2026-10-09)
 
 - `New-Build.ps1` z kořene projektu úspěšně dokončil TypeScript/Vite build a vytvořil release a Linux archiv v `C:\Temp\TTAMCP-Build`.

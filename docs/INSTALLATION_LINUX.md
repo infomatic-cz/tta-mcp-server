@@ -61,4 +61,4 @@ Zastavte službu a zálohujte `/var/lib/tta-mcp-server` i `/etc/tta-mcp-server/v
 
 ## Ruční aktualizace
 
-`Deploy-Server.ps1` vytvoří novou release složku a přepne symlink `current`; existující DB a systemd credential zůstávají na místě. Před aktualizací vytvořte zálohu. Automatické rollback databázového schématu není v 0.1.2 implementován.
+`Deploy-Server.ps1` vytvoří novou release složku a přepne symlink `current`; existující DB a systemd credential zůstávají na místě. Před aktualizací vytvořte zálohu. Databázové rozšíření 0.2.0 je dopředná migrace s `ALTER TABLE`; automatický rollback schématu není implementován.

@@ -2,6 +2,24 @@
 
 Změny jsou řazeny od nejnovější verze. Projekt používá Semantic Versioning.
 
+## [0.2.0] – 2026-10-09
+
+### Přidáno
+- TTA SDK JSON klient volá `UserService.GetSessionWithPassword` nebo `GetSingleSignOnSession` podle zvoleného způsobu autentizace a ověřuje relaci metodou `ValidateSession`.
+- Konfigurace připojení obsahuje SDK cestu, logon protocol a režimy interní heslo / `SYSTEM_SESSION_ID`; TTA tajemství zůstávají šifrovaná AES-256-GCM.
+- Session ID se drží pouze v paměťové cache, před použitím se validuje a při změně nebo odstranění profilu se zahodí.
+- Read-only MCP nástroje pro procesní definice, job stav/historii/události a aktivity; pouze pevný SDK allowlist, kontrola connection scope a audit volání.
+- Výstupy TTA jsou omezené na 2 MB a známá citlivá pole se redigují.
+
+### Dokumentace
+- Aktualizované README, kompatibilita SDK, capability registry, architektura, bezpečnost a nastavení MCP klienta.
+- Build/deploy artefakty přejmenovány na verzi 0.2.0; build proběhl v `C:\Temp\TTAMCP-Build`.
+
+### Omezení
+- TTA tenant ani Linux VM nebyly v tomto prostředí dostupné pro běhové ověření.
+- Zápisové operace, dokumenty, uživatelé/skupiny, Designer, OAuth, víceuživatelské RBAC, PostgreSQL, Docker, MCP Resources/Prompts a plný audit/monitoring nejsou dokončené.
+- SDK JSON default `/Services/Sdk` je konfigurovatelný; cloudový tenant může vyžadovat jinou cestu.
+
 ## [0.1.2] – 2026-10-09
 
 ### Změněno

@@ -13,7 +13,7 @@ import { loadConfig, newBootstrapCode } from "./config.js";
 import { Store, type ConnectionRow, type TokenRow, type UserRow } from "./store.js";
 import { Vault } from "./vault.js";
 import { clearSessionCookie, digest, equalText, hashPassword, newOpaqueToken, registerAdminAuth, sessionCookie, verifyPassword } from "./security.js";
-import { connectionInput, normalizeBaseUrl, probeConnection, safeConnection, saveConnection } from "./tta.js";
+import { connectionInput, invalidateTtaSession, normalizeBaseUrl, probeConnection, safeConnection, saveConnection } from "./tta.js";
 import { connectStdio, createHttpMcpHandler, createMcpToken, findMcpToken, tokenToGrant } from "./mcp.js";
 
 const config = loadConfig();
@@ -23,7 +23,7 @@ let setupCode = store.hasAdmin() ? null : newBootstrapCode();
 let setupExpiresAt = setupCode ? Date.now() + 30 * 60 * 1000 : 0;
 
 if (process.argv.includes("--stdio")) {
-  await connectStdio(store);
+  await connectStdio(store, vault);
 } else {
   const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "../web");
   const app = Fastify({
@@ -59,7 +59,7 @@ if (process.argv.includes("--stdio")) {
       .header("content-security-policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
   });
 
-  app.get("/health/live", async () => ({ status: "ok", version: "0.1.2" }));
+  app.get("/health/live", async () => ({ status: "ok", version: "0.2.0" }));
   app.get("/health/ready", async (_request, reply) => {
     try {
       store.db.prepare("SELECT 1").get();
@@ -156,7 +156,8 @@ if (process.argv.includes("--stdio")) {
     const enabled = (store.db.prepare("SELECT count(*) AS n FROM connections WHERE enabled=1").get() as { n: number }).n;
     const tokens = (store.db.prepare("SELECT count(*) AS n FROM mcp_tokens WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?)").get(new Date().toISOString()) as { n: number }).n;
     const audit = store.db.prepare("SELECT action, target, result, created_at AS createdAt FROM audit_events ORDER BY created_at DESC LIMIT 5").all();
-    return { user: request.admin?.username, totalConnections: total, enabledConnections: enabled, activeMcpTokens: tokens, apiStatus: "UNVERIFIED", recentActivity: audit };
+    const apiCompatible = (store.db.prepare("SELECT count(*) AS n FROM connections WHERE enabled=1 AND last_status='API_COMPATIBLE'").get() as { n: number }).n;
+    return { user: request.admin?.username, totalConnections: total, enabledConnections: enabled, activeMcpTokens: tokens, apiStatus: apiCompatible ? "VERIFIED" : "UNVERIFIED", apiCompatibleConnections: apiCompatible, recentActivity: audit };
   });
 
   app.get("/api/connections", async () => {
@@ -189,13 +190,14 @@ if (process.argv.includes("--stdio")) {
     const row = store.db.prepare("SELECT id FROM connections WHERE id=?").get(request.params.id) as { id: string } | undefined;
     if (!row) return reply.code(404).send({ error: "Připojení nebylo nalezeno." });
     store.db.prepare("DELETE FROM connections WHERE id=?").run(row.id);
+    invalidateTtaSession(row.id);
     store.audit(request.admin?.username ?? "admin", "tta.connection.delete", row.id);
     return { ok: true };
   });
   app.post<{ Params: { id: string } }>("/api/connections/:id/test", async (request, reply) => {
     const row = store.db.prepare("SELECT * FROM connections WHERE id=?").get(request.params.id) as ConnectionRow | undefined;
     if (!row) return reply.code(404).send({ error: "Připojení nebylo nalezeno." });
-    const result = await probeConnection(store, row);
+    const result = await probeConnection(store, vault, row);
     store.audit(request.admin?.username ?? "admin", "tta.connection.test", row.id, result.status);
     return { connectionId: row.id, ...result };
   });
@@ -224,11 +226,20 @@ if (process.argv.includes("--stdio")) {
   app.get("/api/audit", async () => store.db.prepare("SELECT id,actor,action,target,result,created_at AS createdAt FROM audit_events ORDER BY created_at DESC LIMIT 200").all());
   app.get("/api/tools", async () => [
     { name: "tta_connections_list", description: "Seznam povolených připojení bez tajných údajů.", risk: "READ", availability: "AVAILABLE" },
-    { name: "tta_connection_test", description: "Bezpečný HTTP GET test dosažitelnosti; nepotvrzuje API kompatibilitu.", risk: "READ", availability: "AVAILABLE" },
-    { name: "tta_process_*", description: "Procesní operace čekají na ověření kontraktů oficiálního API.", risk: "READ/WRITE", availability: "NOT_IMPLEMENTED" },
+    { name: "tta_connection_test", description: "Ověření přihlášení a SDK JSON relace.", risk: "READ", availability: "AVAILABLE" },
+    ...[
+      ["tta_processes_list", "Seznam procesních definic", "process.read"],
+      ["tta_process_details", "Detail procesní definice", "process.read"],
+      ["tta_process_help", "Text nápovědy procesu", "process.read"],
+      ["tta_process_states", "Stavy procesní definice", "process.read"],
+      ["tta_job_state", "Stav job instance", "job.read"],
+      ["tta_job_history", "Historie job instance", "job.read"],
+      ["tta_job_events", "Události job instance", "job.read"],
+      ["tta_job_activities", "Aktivity job instance", "activity.read"],
+    ].map(([name, description, capability]) => ({ name, description, risk: "READ", capability, availability: "AVAILABLE_AFTER_TTA_AUTH" })),
   ]);
 
-  const mcpHandler = createHttpMcpHandler(store);
+  const mcpHandler = createHttpMcpHandler(store, vault);
   app.all("/tta-mcp", async (request, reply) => {
     const bearer = request.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
     if (!bearer) {

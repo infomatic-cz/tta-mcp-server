@@ -20,6 +20,9 @@ export interface ConnectionRow {
   tta_version: string | null;
   enabled: number;
   timeout_ms: number;
+  sdk_path: string;
+  auth_mode: "PASSWORD" | "SYSTEM_SESSION_ID";
+  logon_protocol: 5 | 7 | 8;
   credential_ciphertext: string | null;
   created_at: string;
   updated_at: string;
@@ -81,6 +84,9 @@ export class Store {
         tta_version TEXT,
         enabled INTEGER NOT NULL DEFAULT 1,
         timeout_ms INTEGER NOT NULL DEFAULT 10000,
+        sdk_path TEXT NOT NULL DEFAULT '/Services/Sdk',
+        auth_mode TEXT NOT NULL DEFAULT 'PASSWORD',
+        logon_protocol INTEGER NOT NULL DEFAULT 7,
         credential_ciphertext TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
@@ -109,6 +115,16 @@ export class Store {
       CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
       CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_events(created_at DESC);
     `);
+    const connectionColumns = this.db.prepare("PRAGMA table_info(connections)").all() as Array<{ name: string }>;
+    if (!connectionColumns.some((column) => column.name === "sdk_path")) {
+      this.db.exec("ALTER TABLE connections ADD COLUMN sdk_path TEXT NOT NULL DEFAULT '/Services/Sdk'");
+    }
+    if (!connectionColumns.some((column) => column.name === "auth_mode")) {
+      this.db.exec("ALTER TABLE connections ADD COLUMN auth_mode TEXT NOT NULL DEFAULT 'PASSWORD'");
+    }
+    if (!connectionColumns.some((column) => column.name === "logon_protocol")) {
+      this.db.exec("ALTER TABLE connections ADD COLUMN logon_protocol INTEGER NOT NULL DEFAULT 7");
+    }
     if (process.platform !== "win32") chmodSync(config.dbPath, 0o600);
   }
 
