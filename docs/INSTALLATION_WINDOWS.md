@@ -60,8 +60,8 @@ Na Windows Serveru není potřeba Git, Python, Visual Studio Build Tools, npm in
 V následujícím příkladu upravte cestu k přenesenému ZIPu a číslo verze. Každou verzi rozbalte do nové složky, abyste při aktualizaci zachovali předchozí vydání pro návrat:
 
 ```powershell
-$zip = 'C:\Transfer\tta-mcp-server-0.2.9-windows-x64.zip'
-$release = 'C:\Apps\tta-mcp-server\releases\0.2.9'
+$zip = 'C:\Transfer\tta-mcp-server-0.2.10-windows-x64.zip'
+$release = 'C:\Apps\tta-mcp-server\releases\0.2.10'
 New-Item -ItemType Directory -Path $release -Force | Out-Null
 Expand-Archive -LiteralPath $zip -DestinationPath $release
 Get-Content (Join-Path $release 'runtime.json')
@@ -74,7 +74,7 @@ Ověřte, že `runtime.json` uvádí `platform: win32`, `arch: x64` a `nodeMajor
 Spusťte aplikaci pod Windows účtem, pod kterým má trvale běžet:
 
 ```powershell
-Set-Location 'C:\Apps\tta-mcp-server\releases\0.2.9'
+Set-Location 'C:\Apps\tta-mcp-server\releases\0.2.10'
 Set-ExecutionPolicy -Scope Process Bypass -Force
 .\Run-Local.ps1 -Portable
 ```
@@ -95,8 +95,8 @@ Po prvním ručním přihlášení vytvořte úlohu v Plánovači úloh (`tasksc
 2. Přidejte aktivační událost **Při spuštění systému**.
 3. Přidejte akci:
    - Program: `C:\Program Files\PowerShell\7\pwsh.exe`
-   - Argumenty: `-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Apps\tta-mcp-server\releases\0.2.9\Run-Local.ps1" -Portable`
-   - **Spustit v**: `C:\Apps\tta-mcp-server\releases\0.2.9`
+   - Argumenty: `-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Apps\tta-mcp-server\releases\0.2.10\Run-Local.ps1" -Portable`
+   - **Spustit v**: `C:\Apps\tta-mcp-server\releases\0.2.10`
 4. Uložte úlohu a spusťte ji ručně. Ověřte `/health/ready`.
 
 Při aktualizaci nejprve zastavte úlohu, rozbalte novou verzi do nové složky `releases`, změňte cestu v akci úlohy na nový `Run-Local.ps1` a úlohu znovu spusťte. Předchozí release ponechte, dokud novou verzi neověříte. Data a klíč zůstávají mimo release složky.
@@ -104,6 +104,7 @@ Při aktualizaci nejprve zastavte úlohu, rozbalte novou verzi do nové složky 
 ## Síť a bezpečné uložení
 
 - Aplikace naslouchá pouze na `127.0.0.1:8380`. Port 8380 neotvírejte přímo ve Windows Firewallu. Pro vzdálený přístup použijte HTTPS reverzní proxy na stejném serveru nebo bezpečný tunel.
+- Při použití Windows Nginx na portu 8543 postupujte podle [samostatného návodu](INSTALLATION_NGINX_WINDOWS.md); nastavte `TTA_PUBLIC_ORIGIN` a `TTA_COOKIE_SECURE` před restartem aplikace.
 - Pro interní certifikát TTA nainstalujte ověřenou kořenovou CA do **Local Computer → Trusted Root Certification Authorities**. Launcher předává Node.js důvěryhodné CA z Windows.
 - Databáze a DPAPI chráněný vault klíč jsou v `%LOCALAPPDATA%\TTA MCP Server` účtu, který aplikaci spouští. TTA hesla a `SYSTEM_SESSION_ID` se šifrují AES-256-GCM; heslo správce se ukládá jako Argon2id hash.
 - Naplánovaná úloha musí běžet pod stejným Windows účtem jako první spuštění. Změna účtu znepřístupní DPAPI klíč. Zálohujte databázi i klíč společně a šifrovaně.
