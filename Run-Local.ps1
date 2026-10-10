@@ -49,7 +49,12 @@ New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
 
 if (-not (Test-Path -LiteralPath $keyPath)) {
     $random = [byte[]]::new(32)
-    [Security.Cryptography.RandomNumberGenerator]::Fill($random)
+    $randomGenerator = [Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $randomGenerator.GetBytes($random)
+    } finally {
+        $randomGenerator.Dispose()
+    }
     $plainKey = [Convert]::ToBase64String($random)
     [Array]::Clear($random, 0, $random.Length)
     $secureKey = ConvertTo-SecureString -String $plainKey -AsPlainText -Force

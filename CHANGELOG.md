@@ -2,6 +2,12 @@
 
 Změny jsou řazeny od nejnovější verze. Projekt používá Semantic Versioning.
 
+## [0.2.9] – 2026-10-10
+
+### Opraveno
+- Generování DPAPI vault klíče používá `RandomNumberGenerator.Create().GetBytes()`, kompatibilní s různými verzemi PowerShellu a .NET na Windows Serveru.
+- Aktualizována verze aplikace a MCP serveru na 0.2.9.
+
 ## [0.2.8] – 2026-10-10
 
 ### Přidáno
