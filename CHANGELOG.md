@@ -2,6 +2,14 @@
 
 Změny jsou řazeny od nejnovější verze. Projekt používá Semantic Versioning.
 
+## [0.2.7] – 2026-10-10
+
+### Dokumentace
+- Windows instalační návod nyní uvádí Git pro získání zdrojů, Python 3 a Visual Studio C++ Build Tools/Windows SDK potřebné při sestavení nativních npm modulů.
+- Doplněny kontroly všech nástrojů, diagnostika chyb `node-gyp`, čistá instalace, první spuštění, plánovaná úloha po restartu, DPAPI pravidla a omezení lokálního síťového bindu.
+- Windows Server je výslovně označen jako neověřené prostředí; postup doporučuje pilotní ověření.
+- Aktualizována verze aplikace a MCP serveru na 0.2.7.
+
 ## [0.2.6] – 2026-10-09
 
 ### Opraveno

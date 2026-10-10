@@ -39,6 +39,6 @@ Audit obsahuje aktéra, typ akce, ID cíle, výsledek a čas. Nepřidává vstup
 - Samostatný neprivilegovaný účet služby, aktualizace OS/Node a omezený SSH/sudo přístup.
 - Pravidelná kontrola auditních záznamů a rotace MCP tokenů.
 
-## Omezení 0.2.6
+## Omezení 0.2.7
 
 Vzdálené OAuth, víceuživatelské role, CSRF synchronizační token, rate limit s distribuovaným úložištěm, rotace klíčů, TTA write operace, dokumentové API a další version-specific adaptéry nejsou implementované. TTA endpoint, credentials a oprávnění musí být ověřeny proti cílovému tenantovi. Nasazení na VM je vhodné pro ověřovací pilot za VPN/TLS, nikoli jako hotová enterprise multi-tenant služba.

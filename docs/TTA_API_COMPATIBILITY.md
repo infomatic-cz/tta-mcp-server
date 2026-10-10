@@ -2,7 +2,7 @@
 
 ## Swagger instance uživatele
 
-Konektor 0.2.6 vychází z [TTA REST Swaggeru](https://winserver-tta26.im.cz/TotalAgility/swagger/ui/index#/Job), který uživatel poskytl, a z jeho [OpenAPI v1 JSON](https://winserver-tta26.im.cz/TotalAgility/swagger/docs/v1). Specifikace uvádí `basePath: /TotalAgility`, HTTPS a REST cesty `/services/sdk/v1/...`. Samotný Swagger neuvádí produktovou verzi TTA; název hostitele se za důkaz verze nepovažuje.
+Konektor 0.2.7 vychází z [TTA REST Swaggeru](https://winserver-tta26.im.cz/TotalAgility/swagger/ui/index#/Job), který uživatel poskytl, a z jeho [OpenAPI v1 JSON](https://winserver-tta26.im.cz/TotalAgility/swagger/docs/v1). Specifikace uvádí `basePath: /TotalAgility`, HTTPS a REST cesty `/services/sdk/v1/...`. Samotný Swagger neuvádí produktovou verzi TTA; název hostitele se za důkaz verze nepovažuje.
 
 | Vlastnost | Hodnota z OpenAPI |
 |---|---|
