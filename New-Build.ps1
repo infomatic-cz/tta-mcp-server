@@ -10,6 +10,7 @@ $version = [string]$packageInfo.version
 $buildStamp = [DateTime]::UtcNow.ToString('yyyyMMddHHmmssfff')
 $release = Join-Path $buildRoot "release-$version-$buildStamp"
 $archive = Join-Path $buildRoot "tta-mcp-server-$version.tgz"
+$windowsArchive = Join-Path $buildRoot "tta-mcp-server-$version-windows-x64.zip"
 $latestRelease = Join-Path $buildRoot 'latest-release.txt'
 
 function Assert-BuildPath([string]$Path) {
@@ -32,9 +33,15 @@ $nodeText = (& node --version).Trim()
 if ($LASTEXITCODE -ne 0 -or $nodeText -notmatch '^v(?<major>22|24)\.(?<minor>\d+)\.') {
     throw 'Node.js 22.15+ or 24 LTS is required. Install the system-wide Node.js LTS release first.'
 }
-if ($Matches.major -eq '22' -and [int]$Matches.minor -lt 15) {
+$nodeMajor = [int]$Matches.major
+if ($nodeMajor -eq 22 -and [int]$Matches.minor -lt 15) {
     throw 'Node.js 22.15+ is required to load trusted certificates from the Windows system store.'
 }
+$nodeArch = (& node -p "process.arch").Trim()
+if ($LASTEXITCODE -ne 0 -or $nodeArch -ne 'x64') {
+    throw 'The Windows Server package must be built with x64 Node.js.'
+}
+$nodeRuntimeVersion = (& node -p "process.versions.node").Trim()
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) { throw 'npm was not found on PATH.' }
 if (-not (Get-Command tar.exe -ErrorAction SilentlyContinue)) { throw 'Windows tar.exe was not found.' }
 
@@ -45,6 +52,10 @@ Remove-BuildDirectory $workspace
 if (Test-Path -LiteralPath $archive) {
     $null = Assert-BuildPath $archive
     Remove-Item -LiteralPath $archive -Force
+}
+if (Test-Path -LiteralPath $windowsArchive) {
+    $null = Assert-BuildPath $windowsArchive
+    Remove-Item -LiteralPath $windowsArchive -Force
 }
 New-Item -ItemType Directory -Path $workspace -Force | Out-Null
 
@@ -85,17 +96,26 @@ try {
 }
 
 New-Item -ItemType Directory -Path $release -Force | Out-Null
-foreach ($item in @('package.json', 'package-lock.json', 'README.md', 'CHANGELOG.md')) {
+foreach ($item in @('package.json', 'package-lock.json', 'README.md', 'CHANGELOG.md', 'Run-Local.ps1')) {
     Copy-Item -LiteralPath (Join-Path $workspace $item) -Destination $release -Force
 }
 foreach ($directory in @('dist', 'docs', 'deploy')) {
     Copy-Item -LiteralPath (Join-Path $workspace $directory) -Destination $release -Recurse -Force
 }
+$runtimeInfo = [ordered]@{
+    appVersion = $version
+    platform = 'win32'
+    arch = $nodeArch
+    nodeVersion = $nodeRuntimeVersion
+    nodeMajor = $nodeMajor
+}
+[IO.File]::WriteAllText((Join-Path $release 'runtime.json'), ($runtimeInfo | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
 
 Push-Location $release
 try {
     npm ci --omit=dev --no-audit --no-fund
     if ($LASTEXITCODE -ne 0) { throw 'Could not install production dependencies into the release directory.' }
+    Compress-Archive -Path (Join-Path $release '*') -DestinationPath $windowsArchive -CompressionLevel Optimal
     & tar.exe -czf $archive package.json package-lock.json README.md CHANGELOG.md dist docs deploy
     if ($LASTEXITCODE -ne 0) { throw 'Could not create the Linux deployment archive.' }
 } finally {
@@ -103,5 +123,6 @@ try {
 }
 
 Write-Output "Build complete: $release"
+Write-Output "Windows Server package (prebuilt x64, Node.js $nodeMajor): $windowsArchive"
 Write-Output "Linux VM artifact: $archive"
 [IO.File]::WriteAllText($latestRelease, $release, [Text.Encoding]::UTF8)

@@ -1,30 +1,45 @@
 [CmdletBinding()]
 param(
     [switch]$Stdio,
-    [switch]$Build
+    [switch]$Build,
+    [switch]$Portable
 )
 
 $ErrorActionPreference = 'Stop'
-$nodeText = (& node --version).Trim()
-if ($LASTEXITCODE -ne 0 -or $nodeText -notmatch '^v(?<major>22|24)\.(?<minor>\d+)\.') {
+$appNodeText = (& node --version).Trim()
+if ($LASTEXITCODE -ne 0 -or $appNodeText -notmatch '^v(?<major>22|24)\.(?<minor>\d+)\.') {
     throw 'Node.js 22.15+ or 24 LTS is required. Install the system-wide Node.js LTS release first.'
 }
 if ($Matches.major -eq '22' -and [int]$Matches.minor -lt 15) {
     throw 'Node.js 22.15+ is required to load trusted certificates from the Windows system store.'
 }
+if ($Build -and $Portable) { throw 'The -Build and -Portable switches cannot be used together.' }
+
 $buildRoot = 'C:\Temp\TTAMCP-Build'
 $latestReleaseFile = Join-Path $buildRoot 'latest-release.txt'
 $buildScript = Join-Path $PSScriptRoot 'New-Build.ps1'
 
-if ($Build -or -not (Test-Path -LiteralPath $latestReleaseFile)) {
-    if ($Stdio) { & $buildScript *> $null } else { & $buildScript }
-}
+if ($Portable) {
+    $releasePath = (Resolve-Path -LiteralPath $PSScriptRoot).Path
+    $runtimeFile = Join-Path $releasePath 'runtime.json'
+    if (-not (Test-Path -LiteralPath $runtimeFile)) { throw 'Portable package runtime.json is missing. Extract the complete Windows ZIP package first.' }
+    $runtimeInfo = Get-Content -LiteralPath $runtimeFile -Raw | ConvertFrom-Json
+    $runningNodeMajor = [int]((& node -p "process.versions.node.split('.')[0]").Trim())
+    $runningNodeArch = (& node -p "process.arch").Trim()
+    if ($runningNodeArch -ne $runtimeInfo.arch -or $runningNodeMajor -ne [int]$runtimeInfo.nodeMajor) {
+        throw "Portable package requires Node.js $($runtimeInfo.nodeMajor) $($runtimeInfo.arch); current runtime is Node.js major $runningNodeMajor $runningNodeArch."
+    }
+} else {
+    if ($Build -or -not (Test-Path -LiteralPath $latestReleaseFile)) {
+        if ($Stdio) { & $buildScript *> $null } else { & $buildScript }
+    }
 
-if (-not (Test-Path -LiteralPath $latestReleaseFile)) { throw 'Build did not write the latest release pointer.' }
-$release = [IO.File]::ReadAllText($latestReleaseFile).Trim()
-$rootPath = [IO.Path]::GetFullPath($buildRoot).TrimEnd('\') + '\'
-$releasePath = [IO.Path]::GetFullPath($release)
-if (-not $releasePath.StartsWith($rootPath, [StringComparison]::OrdinalIgnoreCase)) { throw 'Latest release points outside C:\Temp\TTAMCP-Build.' }
+    if (-not (Test-Path -LiteralPath $latestReleaseFile)) { throw 'Build did not write the latest release pointer.' }
+    $release = [IO.File]::ReadAllText($latestReleaseFile).Trim()
+    $rootPath = [IO.Path]::GetFullPath($buildRoot).TrimEnd('\') + '\'
+    $releasePath = [IO.Path]::GetFullPath($release)
+    if (-not $releasePath.StartsWith($rootPath, [StringComparison]::OrdinalIgnoreCase)) { throw 'Latest release points outside C:\Temp\TTAMCP-Build.' }
+}
 $entry = Join-Path $releasePath 'dist\server\index.js'
 if (-not (Test-Path -LiteralPath $entry)) { throw 'Build did not produce the server entry point.' }
 

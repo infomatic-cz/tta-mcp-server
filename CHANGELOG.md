@@ -2,6 +2,14 @@
 
 Změny jsou řazeny od nejnovější verze. Projekt používá Semantic Versioning.
 
+## [0.2.8] – 2026-10-10
+
+### Přidáno
+- Build vytváří samostatný Windows x64 ZIP s hotovým `dist`, produkčními npm závislostmi a informací o požadované verzi Node.js.
+- Launcher `Run-Local.ps1 -Portable` spouští rozbalený balíček bez buildu a bez instalace závislostí; ověřuje architekturu a hlavní verzi Node.js.
+- Windows instalační návod odděluje buildovací stanici od cílového Windows Serveru; ten potřebuje Node.js runtime, PowerShell a Visual C++ Redistributable, nikoliv kompilátor.
+- Aktualizována verze aplikace a MCP serveru na 0.2.8.
+
 ## [0.2.7] – 2026-10-10
 
 ### Dokumentace

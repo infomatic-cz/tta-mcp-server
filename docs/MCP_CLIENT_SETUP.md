@@ -41,4 +41,4 @@ Nahraďte zástupný text cestou k projektu uloženému ve složce OneDrive. Kli
 - `tta_job_details`, `tta_job_state`, `tta_job_history`, `tta_job_events`, `tta_job_variables` — read-only informace o jobu.
 - `tta_activities_query`, `tta_activities_workqueue`, `tta_activities_count` — read-only TTA activity query a workqueue.
 
-Připojení musí být nakonfigurované a otestované v admin konzoli. TTA odpovědi respektují účetní oprávnění. Query názvy před voláním vytvořte v TotalAgility. Zápis, dokumenty, uživatelé, procesní definice a Designer nejsou v 0.2.7 vystavené.
+Připojení musí být nakonfigurované a otestované v admin konzoli. TTA odpovědi respektují účetní oprávnění. Query názvy před voláním vytvořte v TotalAgility. Zápis, dokumenty, uživatelé, procesní definice a Designer nejsou v 0.2.8 vystavené.
