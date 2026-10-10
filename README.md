@@ -2,13 +2,11 @@
 
 Samostatný MCP server pro správu připojení Tungsten TotalAgility a přístupů MCP klientů. Aplikace nabízí React administrační rozhraní, Fastify API, MCP přes Streamable HTTP a `stdio`, audit a SQLite úložiště.
 
-**Verze 0.2.10.** Konektor používá REST API `/services/sdk/v1`, jeho odpověď validace `IsValid` a autorizační hlavičku TTA session ID. Podporuje interní jméno/heslo, alternativní `SYSTEM_SESSION_ID`, read-only nástroje pro joby a aktivity. Zápisové operace, dokumenty, uživatelé, Designer, PostgreSQL, Docker a plné RBAC zůstávají mimo tento release; viz [aktuální rozsah](docs/TTA_CAPABILITIES.md).
+**Verze 0.2.9.** Konektor používá REST API `/services/sdk/v1`, jeho odpověď validace `IsValid` a autorizační hlavičku TTA session ID. Podporuje interní jméno/heslo, alternativní `SYSTEM_SESSION_ID`, read-only nástroje pro joby a aktivity. Zápisové operace, dokumenty, uživatelé, Designer, PostgreSQL, Docker a plné RBAC zůstávají mimo tento release; viz [aktuální rozsah](docs/TTA_CAPABILITIES.md).
 
 ## Rychlý start ve Windows
 
 Na vývojové stanici vytvořte hotový Windows balíček příkazem `New-Build.ps1`; výstup `tta-mcp-server-<verze>-windows-x64.zip` vznikne v `C:\Temp\TTAMCP-Build`. ZIP obsahuje zkompilovanou aplikaci i produkční závislosti. Na cílový Windows Server přeneste ZIP a nainstalujte Node.js runtime stejné hlavní verze, PowerShell 7 a Visual C++ Redistributable x64. Git, Python, Visual Studio Build Tools ani npm instalace tam nejsou potřeba. Celý postup je v [instalační příručce pro Windows](docs/INSTALLATION_WINDOWS.md). Zdrojové soubory mohou být ve složce OneDrive; build a závislosti vznikají mimo ni.
-
-Pro HTTPS přes Nginx na Windows použijte [návod a konfiguraci reverzní proxy](docs/INSTALLATION_NGINX_WINDOWS.md). Výchozí veřejný port je 8543 a aplikace zůstává dostupná jen na `127.0.0.1:8380`.
 
 Následující příkazy spouštějí zdrojový projekt na vývojovém počítači. Na cílovém Windows Serveru postupujte podle příručky a spusťte rozbalený ZIP přes `Run-Local.ps1 -Portable`.
 
@@ -81,7 +79,7 @@ Pro `stdio` se nepoužívá vzdálený API token; oprávnění odpovídá lokál
 - Administrační cookie je HttpOnly, SameSite=Strict a na vzdálené instalaci Secure. Mutující administrační API kontroluje Origin.
 - Výchozí síťový bind je loopback; TTA adresa vyžaduje HTTPS, pokud administrátor výslovně nepovolí HTTP.
 - MCP token lze omezit na vybraná prostředí, expirovat a okamžitě revokovat.
-- TTA operace v 0.2.10 jsou pouze read-only a volají konkrétní REST endpointy z allowlistu. Test spojení ověřuje REST login a `IsValid`; neprokazuje automaticky oprávnění pro každé TTA query.
+- TTA operace v 0.2.9 jsou pouze read-only a volají konkrétní REST endpointy z allowlistu. Test spojení ověřuje REST login a `IsValid`; neprokazuje automaticky oprávnění pro každé TTA query.
 - `SYSTEM_SESSION_ID` a TTA heslo se šifrují stejným vault klíčem. Zálohujte databázi a chráněný vault klíč společně.
 
-Podrobnosti: [Architektura](docs/ARCHITECTURE.md), [Konfigurace](docs/CONFIGURATION.md), [Bezpečnost](docs/SECURITY.md), [Windows](docs/INSTALLATION_WINDOWS.md), [Nginx na Windows](docs/INSTALLATION_NGINX_WINDOWS.md), [Linux](docs/INSTALLATION_LINUX.md), [kompatibilita TTA](docs/TTA_API_COMPATIBILITY.md).
+Podrobnosti: [Architektura](docs/ARCHITECTURE.md), [Konfigurace](docs/CONFIGURATION.md), [Bezpečnost](docs/SECURITY.md), [Windows](docs/INSTALLATION_WINDOWS.md), [Linux](docs/INSTALLATION_LINUX.md), [kompatibilita TTA](docs/TTA_API_COMPATIBILITY.md).

@@ -2,17 +2,6 @@
 
 Změny jsou řazeny od nejnovější verze. Projekt používá Semantic Versioning.
 
-## [0.2.10] – 2026-10-10
-
-### Přidáno
-- Návod a Windows konfigurace Nginx pro HTTPS reverzní proxy na portu 8543 s MCP serverem na loopbacku 8380.
-- Heslo k šifrovanému PEM klíči lze uložit chráněné DPAPI a zpřístupnit Nginx pouze přes lokální pojmenovanou rouru, bez trvalého souboru s heslem.
-- Dokumentováno nastavení veřejného HTTPS originu, cookies Secure, prvotní lokální založení správce, firewall a ověření.
-
-### Bezpečnost
-- Nginx konfigurace zakazuje staré TLS verze, TLS early data a nepovolené SNI; záznamy požadavků neobsahují query string ani autorizační hlavičky.
-- Aktualizována verze aplikace a MCP serveru na 0.2.10.
-
 ## [0.2.9] – 2026-10-10
 
 ### Opraveno
