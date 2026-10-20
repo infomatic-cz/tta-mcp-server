@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <system.webServer>
+    <handlers>
+      <add name="httpPlatformHandler" path="*" verb="*" modules="httpPlatformHandler" resourceType="Unspecified" />
+    </handlers>
+    <httpPlatform processPath="@@NODE_EXE@@"
+                  arguments="&quot;@@APP_ENTRY@@&quot;"
+                  startupTimeLimit="60"
+                  startupRetryCount="10"
+                  rapidFailsPerMinute="10"
+                  requestTimeout="01:00:00"
+                  processesPerApplication="1"
+                  stdoutLogEnabled="true"
+                  stdoutLogFile="@@STDOUT_LOG@@">
+      <environmentVariables>
+        <environmentVariable name="TTA_HOST" value="127.0.0.1" />
+        <environmentVariable name="TTA_BASE_PATH" value="@@BASE_PATH@@" />
+        <environmentVariable name="TTA_DATA_DIR" value="@@DATA_DIR@@" />
+        <environmentVariable name="TTA_VAULT_KEY_DPAPI_FILE" value="@@DPAPI_KEY_FILE@@" />
+        <environmentVariable name="TTA_PUBLIC_ORIGIN" value="@@PUBLIC_ORIGIN@@" />
+        <environmentVariable name="TTA_COOKIE_SECURE" value="true" />
+        <environmentVariable name="NODE_OPTIONS" value="--use-system-ca" />
+      </environmentVariables>
+    </httpPlatform>
+    <security>
+      <requestFiltering>
+        <requestLimits maxAllowedContentLength="1048576" />
+      </requestFiltering>
+    </security>
+    <directoryBrowse enabled="false" />
+    <httpProtocol>
+      <customHeaders>
+        <add name="Strict-Transport-Security" value="max-age=31536000" />
+      </customHeaders>
+    </httpProtocol>
+  </system.webServer>
+</configuration>

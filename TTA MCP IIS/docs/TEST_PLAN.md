@@ -1,0 +1,18 @@
+# Plán ověřování
+
+Plán popisuje ověřitelné schopnosti dostupné v aplikaci a dokumentaci. Neoznačuje žádnou TTA verzi jako kompatibilní.
+
+| Oblast | Ověření požadované před produkčním víceuživatelským provozem |
+|---|---|
+| Build | Čistý Windows x64 build ze source mirroru mimo OneDrive a kontrola obsahu IIS ZIP balíčku. |
+| První účet | Jednorázový lokální setup, neplatný kód, vypršení kódu, duplicitní setup. |
+| Přihlášení | Argon2id ověření, chybné heslo, rate limit, expirace/revokace session, cookie flags. |
+| Tajemství | AES-GCM roundtrip, změna ciphertextu, DB bez vault key, logy bez secretů, Windows DPAPI lifecycle a ACL IIS aplikačního poolu. |
+| API | CSRF/Origin, Host header, login throttling, URL validace, body limit, audit sanitizace. |
+| MCP | SDK handshake, tool list/call, HTTP bearer validation, token scope izolace, expiry/revocation, stdio framing. |
+| SQLite | Schéma, WAL, souběžný přístup, backup/restore, disk full. |
+| TTA adaptér | Každá metoda ověřena proti oficiálnímu SDK/REST kontraktu a konkrétní verzi instalace. |
+| UI | První setup, login, připojení CRUD, token create/revoke, menší viewport a přístupnost. |
+| IIS | Instalace HttpPlatformHandler, HTTPS binding 443, virtuální cesta, dynamický backend port, health endpointy, restart poolu, ACL a rollback na předchozí release. |
+
+Před každým skutečným TTA testem používat testovací instalaci a pouze bezpečné čtecí operace. Destruktivní operace nejsou implementovány.
