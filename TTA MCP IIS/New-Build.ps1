@@ -114,6 +114,10 @@ try {
     Pop-Location
 }
 
+$standaloneInstaller = Join-Path $buildRoot 'Install-TTA-MCP.ps1'
+Copy-Item -LiteralPath (Join-Path $workspace 'Install-TTA-MCP.ps1') -Destination $standaloneInstaller -Force
+
 Write-Output "Build complete: $release"
 Write-Output "Windows IIS package (prebuilt x64, Node.js $nodeMajor): $windowsArchive"
+Write-Output "Standalone installer: $standaloneInstaller"
 [IO.File]::WriteAllText($latestRelease, $release, [Text.Encoding]::UTF8)

@@ -2,6 +2,14 @@
 
 Změny jsou řazeny od nejnovější verze. Projekt používá Semantic Versioning.
 
+## [0.3.3] – 2026-10-26
+
+### Změněno
+- `New-Build.ps1` ukládá samostatnou kopii `Install-TTA-MCP.ps1` vedle Windows x64 ZIPu do `C:\Temp\TTAMCP-Build\IIS`.
+- Instalační skript bez parametrů vybírá vedle sebe ZIP s nejvyšší stabilní verzí, použije web `Default Web Site`, aplikaci `/tta-mcp` a kořen `C:\Apps\TTAMCP`.
+- Odstraněny běžné instalační dotazy; při nejednoznačných HTTPS vazbách se použije první hostname nebo DNS jméno počítače. Parametr `-ServerHost` zůstává jako možnost přepsání.
+- Aktualizován IIS návod pro přenos ZIPu a samostatného instalátoru a pro nasazení bez parametrů.
+
 ## [0.3.2] – 2026-10-26
 
 ### Opraveno

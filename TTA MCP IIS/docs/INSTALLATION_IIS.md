@@ -16,10 +16,11 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 Hotový ZIP vznikne mimo OneDrive:
 
 ```text
-C:\Temp\TTAMCP-Build\IIS\tta-mcp-server-iis-0.3.2-windows-x64.zip
+C:\Temp\TTAMCP-Build\IIS\tta-mcp-server-iis-0.3.3-windows-x64.zip
+C:\Temp\TTAMCP-Build\IIS\Install-TTA-MCP.ps1
 ```
 
-ZIP obsahuje zkompilovaný server, webové rozhraní, produkční Node závislosti, IIS šablonu a instalační skript. Build se na cílovém serveru nedělá.
+ZIP obsahuje zkompilovaný server, webové rozhraní, produkční Node závislosti a IIS šablonu. Samostatný `Install-TTA-MCP.ps1` se ukládá vedle ZIPu, takže jej není potřeba na serveru vybalovat z archivu. Build se na cílovém serveru nedělá.
 
 ## 2. Co musí být na cílovém serveru
 
@@ -42,30 +43,21 @@ Na server se nekopírují zdroje, Git, Python ani Visual Studio Build Tools. Nen
 
 ## 3. Instalace aplikace do existující HTTPS site
 
-Přeneste ZIP například do `C:\Transfer` a rozbalte jej do nové dočasné složky:
+Přeneste ZIP i samostatný `Install-TTA-MCP.ps1` například do stejné složky `C:\Transfer`. ZIP nerozbalujte; instalátor jej bezpečně rozbalí do dočasné složky a po nasazení ji uklidí. Na serveru otevřete 64bitový PowerShell 7 jako správce a spusťte:
 
 ```powershell
-$zip = 'C:\Transfer\tta-mcp-server-iis-0.3.2-windows-x64.zip'
-$package = 'C:\Transfer\tta-mcp-iis-0.3.2'
-New-Item -ItemType Directory -Path $package -Force | Out-Null
-Expand-Archive -LiteralPath $zip -DestinationPath $package
-Get-Content (Join-Path $package 'runtime.json')
-node --version
-node -p "process.arch"
-```
-
-Otevřete **64bitový PowerShell 7 jako správce**, přejděte do rozbaleného balíčku a spusťte instalační skript. `SiteName` musí odpovídat názvu existujícího IIS webu. `ApplicationPath` je nová aplikace pod tímto webem:
-
-```powershell
-Set-Location 'C:\Transfer\tta-mcp-iis-0.3.2'
+Set-Location 'C:\Transfer'
 Set-ExecutionPolicy -Scope Process Bypass -Force
-.\Install-TTA-MCP.ps1 `
-  -SiteName 'Default Web Site' `
-  -ApplicationPath 'tta-mcp' `
-  -InstallRoot 'C:\Apps\TTA MCP IIS'
+.\Install-TTA-MCP.ps1
 ```
 
-Skript odvodí hostname z existující HTTPS vazby. Pokud je na webu více hostname nebo vazba bez hostname, zeptá se na jméno serveru; pro neinteraktivní instalaci použijte `-ServerHost`. Skript nevytváří ani nemění IIS web, HTTPS binding, certifikát nebo port. Aplikace pak bude dostupná na:
+Bez parametrů instalátor vyhledá vedle sebe ZIP `tta-mcp-server-iis-<verze>-windows-x64.zip` s nejvyšším číslem verze. Výchozí hodnoty jsou:
+
+- IIS web: `Default Web Site`
+- Aplikační cesta: `/tta-mcp`
+- Kořen vydání: `C:\Apps\TTAMCP` (konkrétní verze se ukládá do `releases\<verze>`)
+
+Skript odvodí hostname z existující HTTPS vazby. Při několika hostnames zvolí první HTTPS binding; při bindingu bez hostname použije DNS jméno počítače. Pokud certifikát používá jiný hostname, předejte `-ServerHost`. Jednotlivé výchozí hodnoty lze přepsat parametry `-PackagePath`, `-SiteName`, `-ApplicationPath`, `-InstallRoot` a `-ServerHost`. Skript nevytváří ani nemění IIS web, HTTPS binding, certifikát nebo port. Aplikace pak bude dostupná na:
 
 ```text
 https://winserver-tta26.im.cz/tta-mcp/
@@ -115,7 +107,7 @@ Zálohujte databázi a DPAPI soubor společně a chraňte zálohu. DPAPI LocalMa
 
 ## 7. Aktualizace a návrat
 
-Rozbalte novou verzi do nové dočasné složky a spusťte její `Install-TTA-MCP.ps1` se stejnými parametry. Skript zkopíruje release do nové složky pod `C:\Apps\TTA MCP IIS\releases\<verze>` a přesměruje IIS aplikaci na novou verzi. Databáze a DPAPI klíč pod `%ProgramData%` zůstanou zachované; starší release se nemaže. Pokud po prvním nasazení selže pouze readiness kontrola, opravte příčinu a spusťte instalátor znovu se stejným balíčkem: shodný existující release znovu použije a nepřepíše jeho soubory.
+Přeneste nový ZIP a samostatný `Install-TTA-MCP.ps1` do stejné složky. Instalátor automaticky vybere nejvyšší verzi nebo použijte `-PackagePath` pro konkrétní ZIP. Skript zkopíruje release do nové složky pod `C:\Apps\TTAMCP\releases\<verze>` a přesměruje IIS aplikaci na novou verzi. Databáze a DPAPI klíč pod `%ProgramData%` zůstanou zachované; starší release se nemaže. Pokud po prvním nasazení selže pouze readiness kontrola, opravte příčinu a spusťte instalátor znovu se stejným balíčkem: shodný existující release znovu použije a nepřepíše jeho soubory.
 
 Před aktualizací poznamenejte cestu `Physical Path` aplikace v IIS Manageru. Při návratu nastavte její `Physical Path` na předchozí složku `releases\<verze>` a recyklujte `TtaMcpIIS` app pool.
 

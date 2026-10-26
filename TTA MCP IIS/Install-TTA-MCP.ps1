@@ -1,10 +1,10 @@
 ﻿[CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)] [string]$SiteName,
+    [string]$SiteName = 'Default Web Site',
     [string]$ApplicationPath = 'tta-mcp',
     # Optional override when the IIS site has several/wildcard HTTPS host bindings.
     [string]$ServerHost,
-    [string]$InstallRoot,
+    [string]$InstallRoot = 'C:\Apps\TTAMCP',
     [string]$PackagePath,
     [string]$AppPoolName = 'TtaMcpIIS',
     [string]$ServiceAccount,
@@ -90,7 +90,7 @@ function Test-IisHttpsBinding {
 }
 
 # Determine the server part of https://<server>/<application> using existing IIS bindings.
-# An explicit server host is only requested when IIS cannot uniquely provide one.
+# Select a server host from the existing HTTPS bindings without prompting.
 # Never create or edit an IIS site, binding or TLS certificate.
 function Get-IisHttpsOrigin {
     param(
@@ -110,16 +110,19 @@ function Get-IisHttpsOrigin {
     $boundHosts = @($httpsBindings | ForEach-Object Host | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
     $selectedHost = $RequestedHost
     if ([string]::IsNullOrWhiteSpace($selectedHost)) {
-        if ($boundHosts.Count -eq 1) {
+        if ($boundHosts.Count -ge 1) {
             $selectedHost = $boundHosts[0]
             Write-Host "Using existing IIS HTTPS server: $selectedHost" -ForegroundColor Cyan
-        } else {
             if ($boundHosts.Count -gt 1) {
-                Write-Host "This IIS site has several HTTPS names: $($boundHosts -join ', ')" -ForegroundColor Cyan
-            } else {
-                Write-Host 'This IIS site uses an HTTPS binding without a hostname.' -ForegroundColor Cyan
+                Write-Warning "Several HTTPS hostnames are configured. Using the first binding '$selectedHost'; pass -ServerHost to select another hostname."
             }
-            $selectedHost = Read-Host -Prompt 'Existing server hostname or IP address (no https://, no path)'
+        } else {
+            try {
+                $selectedHost = [Net.Dns]::GetHostEntry([Net.Dns]::GetHostName()).HostName
+            } catch {
+                $selectedHost = $env:COMPUTERNAME
+            }
+            Write-Warning "The HTTPS binding has no hostname. Using this server name: $selectedHost. Pass -ServerHost to override it if the TLS certificate uses another name."
         }
     }
     $selectedHost = ([string]$selectedHost).Trim()
@@ -330,18 +333,17 @@ function Get-LatestReadyPort([string]$LogDirectory) {
     return $null
 }
 
-# Interactive installation root for the TTA MCP IIS application.
+# Installation root for the TTA MCP IIS application.
 # The archive contents are placed under <root>\releases\<version>.
 function Get-InstallRoot {
     param([string] $RequestedRoot, [string] $DefaultRoot, [string] $ApplicationLabel)
     $selected = $RequestedRoot
     if ([string]::IsNullOrWhiteSpace($selected)) {
-        Write-Host "Select the ROOT directory for $ApplicationLabel releases (ZIP contents go to <root>\releases\<version>)." -ForegroundColor Cyan
-        $reply = Read-Host -Prompt "Installation root [$DefaultRoot]"
-        $selected = if ([string]::IsNullOrWhiteSpace($reply)) { $DefaultRoot } else { $reply.Trim() }
+        $selected = $DefaultRoot
     }
     $selected = $selected.Trim().Trim('"')
     if ([string]::IsNullOrWhiteSpace($selected)) { throw 'The installation root cannot be empty.' }
+    Write-Host "$ApplicationLabel installation root: $selected" -ForegroundColor Cyan
     if (-not [IO.Path]::IsPathFullyQualified($selected) -or $selected -notmatch '^[A-Za-z]:\\') {
         throw 'Installation root must be an absolute local path, for example C:\Apps\MyApp. UNC and relative paths are not supported.'
     }
@@ -357,15 +359,31 @@ function Get-InstallRoot {
     return $full
 }
 
-$installRootFull = Get-InstallRoot -RequestedRoot $InstallRoot -DefaultRoot 'C:\Apps\TTA MCP IIS' -ApplicationLabel 'TTA MCP'
+$installRootFull = Get-InstallRoot -RequestedRoot $InstallRoot -DefaultRoot 'C:\Apps\TTAMCP' -ApplicationLabel 'TTA MCP'
 $stagingPath = $null
 try {
     # Deployment can start directly from ZIP or from the original extracted directory.
-    # If no ZIP is passed and the script is not inside a distribution, ask for the ZIP.
+    # Without a package override, choose the highest-version x64 ZIP beside this installer.
     $scriptRootSource = (Resolve-Path -LiteralPath $PSScriptRoot).Path.TrimEnd('\')
     $archiveInput = $PackagePath
     if ([string]::IsNullOrWhiteSpace($archiveInput) -and -not (Test-Path -LiteralPath (Join-Path $scriptRootSource 'runtime.json') -PathType Leaf)) {
-        $archiveInput = Read-Host -Prompt 'Full path to the TTA MCP Windows x64 release ZIP'
+        $packages = @(
+            Get-ChildItem -LiteralPath $scriptRootSource -File -Filter 'tta-mcp-server-iis-*-windows-x64.zip' -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                    if ($_.BaseName -match '^tta-mcp-server-iis-(?<version>\d+\.\d+\.\d+)-windows-x64$') {
+                        [PSCustomObject]@{
+                            File = $_
+                            Version = [version]$Matches.version
+                        }
+                    }
+                }
+        )
+        if ($packages.Count -eq 0) {
+            throw "No TTA MCP Windows x64 release ZIP was found beside '$PSCommandPath'. Copy Install-TTA-MCP.ps1 and a release ZIP into the same folder, or pass -PackagePath."
+        }
+        $selectedPackage = $packages | Sort-Object -Property @{ Expression = 'Version'; Descending = $true }, @{ Expression = { $_.File.LastWriteTimeUtc }; Descending = $true } | Select-Object -First 1
+        $archiveInput = $selectedPackage.File.FullName
+        Write-Host "Selected latest application package v$($selectedPackage.Version): $archiveInput" -ForegroundColor Cyan
     }
     if (-not [string]::IsNullOrWhiteSpace($archiveInput)) {
         $zipFile = (Resolve-Path -LiteralPath $archiveInput -ErrorAction Stop).Path

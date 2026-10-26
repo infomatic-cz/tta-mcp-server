@@ -1,5 +1,12 @@
 # Výsledky ověření
 
+## 0.3.3 (2026-10-26)
+
+- Windows x64 build proběhl mimo OneDrive. `New-Build.ps1` vytvořil ZIP `C:\Temp\TTAMCP-Build\IIS\tta-mcp-server-iis-0.3.3-windows-x64.zip` a samostatný `C:\Temp\TTAMCP-Build\IIS\Install-TTA-MCP.ps1`.
+- PowerShell parser ověřil syntaxi instalačního a build skriptu. Bezparametrové výchozí hodnoty a výběr ZIPu podle nejvyšší stabilní verze byly zkontrolovány ve zdroji.
+- Finální ZIP byl zkontrolován na zkompilovaný server, runtime metadata, IIS šablonu a produkční závislosti.
+- Skutečné nasazení na IIS/HttpPlatformHandler ani přihlášení ke konkrétní TTA instanci nebylo ověřeno; místní počítač nemá IIS AppCmd. Automatizovaná regresní sada nebyla spuštěna.
+
 ## 0.3.2 (2026-10-26)
 
 - `New-Build.ps1` úspěšně dokončil Windows x64 TypeScript kompilaci, Vite build i instalaci produkčních závislostí v dočasném sestavení mimo OneDrive. Výsledný ZIP je `C:\Temp\TTAMCP-Build\IIS\tta-mcp-server-iis-0.3.2-windows-x64.zip`; adresář posledního buildu je uveden v `C:\Temp\TTAMCP-Build\IIS\latest-release.txt`.
