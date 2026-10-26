@@ -18,7 +18,7 @@ import { connectStdio, createHttpMcpHandler, createMcpToken, findMcpToken, token
 const config = loadConfig();
 const store = new Store(config);
 const vault = new Vault(config.vaultKey);
-let setupCode = store.hasAdmin() ? null : newBootstrapCode();
+let setupCode = !store.hasAdmin() && !config.allowRemoteFirstSetup ? newBootstrapCode() : null;
 let setupExpiresAt = setupCode ? Date.now() + 30 * 60 * 1000 : 0;
 
 if (process.argv.includes("--stdio")) {
@@ -68,7 +68,7 @@ if (process.argv.includes("--stdio")) {
       .header("content-security-policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
   });
 
-  app.get("/health/live", async () => ({ status: "ok", version: "0.3.3" }));
+  app.get("/health/live", async () => ({ status: "ok", version: "0.3.4" }));
   app.get("/health/ready", async (_request, reply) => {
     try {
       store.db.prepare("SELECT 1").get();
@@ -80,31 +80,48 @@ if (process.argv.includes("--stdio")) {
 
   app.get("/api/setup", async (request) => {
     const required = !store.hasAdmin();
+    const setupCodeRequired = !config.allowRemoteFirstSetup;
     const remote = request.raw.socket.remoteAddress ?? "";
     const loopback = remote === "127.0.0.1" || remote === "::1" || remote === "::ffff:127.0.0.1";
     const localHost = ["localhost", "127.0.0.1", `[::1]`, `localhost:${config.port}`, `127.0.0.1:${config.port}`, `[::1]:${config.port}`]
       .includes((request.headers.host ?? "").toLowerCase());
     const forwarded = request.headers["x-forwarded-for"];
     const localBootstrap = loopback && localHost && !forwarded;
-    if (required && localBootstrap && (!setupCode || Date.now() >= setupExpiresAt)) {
+    if (required && setupCodeRequired && localBootstrap && (!setupCode || Date.now() >= setupExpiresAt)) {
       setupCode = newBootstrapCode();
       setupExpiresAt = Date.now() + 30 * 60 * 1000;
     }
     return {
       required,
-      setupCode: required && setupCode && Date.now() < setupExpiresAt && localBootstrap ? setupCode : null,
-      expiresAt: required && setupCode && Date.now() < setupExpiresAt && localBootstrap ? new Date(setupExpiresAt).toISOString() : null,
-      localOnly: required && !localBootstrap,
+      setupCodeRequired,
+      setupCode: required && setupCodeRequired && setupCode && Date.now() < setupExpiresAt && localBootstrap ? setupCode : null,
+      expiresAt: required && setupCodeRequired && setupCode && Date.now() < setupExpiresAt && localBootstrap ? new Date(setupExpiresAt).toISOString() : null,
+      localOnly: required && setupCodeRequired && !localBootstrap,
     };
   });
 
   app.post("/api/setup", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (request, reply) => {
-    const schema = z.object({ setupCode: z.string().min(16).max(200), username: z.string().trim().min(3).max(80), password: z.string().min(12).max(256) });
+    if (config.allowRemoteFirstSetup) {
+      const expectedUrl = config.publicOrigin ? new URL(config.publicOrigin) : null;
+      let requestOrigin = "";
+      try { requestOrigin = request.headers.origin ? new URL(request.headers.origin).origin : ""; } catch { requestOrigin = ""; }
+      if (!expectedUrl || requestOrigin !== expectedUrl.origin || request.headers.host?.toLowerCase() !== expectedUrl.host.toLowerCase()) {
+        store.audit("anonymous", "setup.create", null, "DENIED");
+        return reply.code(403).send({ error: "První účet lze vytvořit pouze přes nakonfigurovanou HTTPS adresu IIS." });
+      }
+    }
+    const schema = z.object({ setupCode: z.string().min(16).max(200).optional(), username: z.string().trim().min(3).max(80), password: z.string().min(12).max(256) });
     const parsed = schema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "Zkontrolujte zadané hodnoty. Heslo musí mít alespoň 12 znaků." });
-    if (store.hasAdmin() || !setupCode || Date.now() >= setupExpiresAt || !equalText(parsed.data.setupCode, setupCode)) {
+    const validSetupAccess = config.allowRemoteFirstSetup || Boolean(
+      setupCode && parsed.data.setupCode && Date.now() < setupExpiresAt && equalText(parsed.data.setupCode, setupCode),
+    );
+    if (store.hasAdmin() || !validSetupAccess) {
       store.audit("anonymous", "setup.create", null, "DENIED");
-      return reply.code(403).send({ error: "Instalační kód je neplatný nebo vypršel. Restartujte server a načtěte nový kód z lokální adresy." });
+      const message = config.allowRemoteFirstSetup
+        ? "První účet správce již byl vytvořen."
+        : "Instalační kód je neplatný nebo vypršel. Obnovte kód z lokálního přístupu.";
+      return reply.code(403).send({ error: message });
     }
     const passwordHash = await hashPassword(parsed.data.password);
     const userId = randomUUID();
@@ -323,5 +340,6 @@ if (process.argv.includes("--stdio")) {
 
   await app.listen({ host: config.host, port: config.port });
   app.log.info({ host: config.host, port: config.port }, "TTA MCP Server is ready");
-  if (setupCode) app.log.info("First administrator setup is available only from the local host at /.");
+  if (!store.hasAdmin() && config.allowRemoteFirstSetup) app.log.info("First administrator setup is available through the configured IIS HTTPS origin.");
+  else if (setupCode) app.log.info("First administrator setup is available only from the local host at /.");
 }

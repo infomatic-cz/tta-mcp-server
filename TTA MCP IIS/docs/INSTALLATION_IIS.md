@@ -16,7 +16,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 Hotový ZIP vznikne mimo OneDrive:
 
 ```text
-C:\Temp\TTAMCP-Build\IIS\tta-mcp-server-iis-0.3.3-windows-x64.zip
+C:\Temp\TTAMCP-Build\IIS\tta-mcp-server-iis-0.3.4-windows-x64.zip
 C:\Temp\TTAMCP-Build\IIS\Install-TTA-MCP.ps1
 ```
 
@@ -65,7 +65,7 @@ https://winserver-tta26.im.cz/tta-mcp/
 
 Instalační skript vytvoří aplikační pool `TtaMcpIIS`, nastaví URL prefix, přístupová práva a `web.config`. Výchozí identita nového poolu je ApplicationPoolIdentity; při aktualizaci se existující identita zachová. Volitelně lze použít `-ServiceAccount 'DOMENA\svc_tta_mcp'`; heslo se zadá skrytým vstupem a IIS je uloží v chráněné konfiguraci. `-UseApplicationPoolIdentity` výslovně nastaví výchozí identitu. HttpPlatformHandler předá Node.js dynamický port přes `%HTTP_PLATFORM_PORT%`; port 8380 ani 8543 se ve firewallu neotevírá.
 
-Při prvním nasazení skript vytvoří náhodný vault klíč, uloží jej zašifrovaný Windows DPAPI pro tento počítač a po úspěšné HTTPS readiness kontrole vypíše jednorázový instalační kód. Kód zadejte do webového rozhraní a založte účet správce s heslem alespoň 12 znaků. Kód platí 30 minut a po vytvoření účtu zanikne. Později se přihlašujte svým správcovským účtem. Proces je 64bitový a skript udělí potřebná přístupová práva vybrané identitě aplikačního poolu.
+Při prvním nasazení skript vytvoří náhodný vault klíč a uloží jej chráněný Windows DPAPI pro tento počítač. Po HTTPS kontrole otevřete vypsanou adresu Admin UI přímo v prohlížeči a založte prvního správce s heslem alespoň 12 znaků. Průvodce funguje přes existující IIS HTTPS binding na portu 443; není potřeba otevírat ani použít port 8380. Po vytvoření prvního účtu se průvodce vypne a další přístup používá běžné přihlášení. IIS setup je dostupný jen dokud databáze neobsahuje správce, proto jej dokončete hned po instalaci a do té doby omezte přístup k webu na správce. Proces je 64bitový a skript udělí potřebná přístupová práva vybrané identitě aplikačního poolu.
 
 Pokud skript vypíše, že health kontrola ještě neodpovídá, ověřte stav na `https://winserver-tta26.im.cz/tta-mcp/health/ready` a prohlédněte IIS/HttpPlatformHandler logy v:
 

@@ -16,7 +16,7 @@ Pro samotnou kryptografickou operaci je nutné tajemství načíst do paměti pr
 
 - Výchozí bind je `127.....1`; IIS HttpPlatformHandler naslouchá jen na interním dynamickém portu a obsluhuje veřejnou HTTPS vazbu IIS.
 - Host allowlist, Origin allowlist pro browser požadavky, SameSite cookies, rate limit login/setup a omezená velikost JSON body.
-- Bez CORS wildcardu. `trustProxy` je vypnutý; `X-Forwarded-For` se nepoužívá pro autentizaci ani kontrolu bootstrap kódu.
+- Bez CORS wildcardu. `trustProxy` je vypnutý; `X-Forwarded-For` se nepoužívá pro autentizaci ani setup přístup.
 - TTA URL přijímá pouze HTTPS, pokud operátor nepovolí HTTP. REST redirecty se odmítají; URL credentials/query nejsou povolené. Swagger UI odkaz lze vložit a normalizuje se na základní URL.
 - Ověření certifikátu je standardně zapnuté. Volba „Důvěřovat certifikátu TTA“ se ukládá jednotlivě u profilu a používá neověřený TLS agent pouze pro toto připojení. Šifrování zůstává zapnuté, ale bez ověření certifikátu je možné podvržení serveru a odposlech přihlašovacích údajů; preferujte instalaci interní CA.
 - MCP požadavky přes HTTP vyžadují bearer token a filtrují připojení podle jeho přiřazení.
@@ -24,9 +24,9 @@ Pro samotnou kryptografickou operaci je nutné tajemství načíst do paměti pr
 
 ## První účet
 
-Setup kód existuje v paměti pouze při prvním spuštění bez účtu. API jej poskytne jen když socket i Host odpovídají lokálnímu přístupu a není přítomen proxy `X-Forwarded-For`. Kód není uložen ani zapisován do logu; po úspěšném založení správce zanikne.
+Lokální režim si ponechává jednorázový setup kód dostupný jen přes loopback. IIS režim povolí průvodce prvního správce přes nakonfigurovaný HTTPS origin, jen dokud databáze neobsahuje uživatele. Host/Origin allowlist, HTTPS Secure cookie, limit požadavků a databázová transakce chrání vytvoření účtu; další pokus po založení správce je odmítnut. Každý, kdo může dosáhnout na IIS aplikaci před vytvořením prvního správce, se může pokusit účet založit. Omezte síťový/IIS přístup na správce, dokud průvodce nedokončíte.
 
-Deploy skript získá instalační kód přímým loopback požadavkem na spuštěný proces a vypíše jej pouze do lokální administrátorské konzole. Veřejná doména k bootstrap kódu přístup nemá.
+Instalační skript ověřuje readiness a stav průvodce přes veřejnou HTTPS adresu IIS. Nečte interní port procesu, nevydává bootstrap kód a nevyžaduje lokální přístup přes port 8380.
 
 ## Audit a logy
 

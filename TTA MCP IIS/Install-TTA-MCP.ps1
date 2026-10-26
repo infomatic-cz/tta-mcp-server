@@ -9,8 +9,7 @@ param(
     [string]$AppPoolName = 'TtaMcpIIS',
     [string]$ServiceAccount,
     [switch]$UseApplicationPoolIdentity,
-    [string]$NodeExePath = 'C:\Program Files\nodejs\node.exe',
-    [switch]$SkipBootstrapCode
+    [string]$NodeExePath = 'C:\Program Files\nodejs\node.exe'
 )
 
 #Requires -RunAsAdministrator
@@ -317,22 +316,6 @@ function Get-XmlValue([string]$Value) {
     return [System.Security.SecurityElement]::Escape($Value)
 }
 
-function Get-LatestReadyPort([string]$LogDirectory) {
-    $logs = Get-ChildItem -LiteralPath $LogDirectory -File -Filter 'httpplatform*' -ErrorAction SilentlyContinue |
-        Sort-Object LastWriteTime -Descending
-    foreach ($log in $logs) {
-        foreach ($line in (Get-Content -LiteralPath $log.FullName -Tail 300 -ErrorAction SilentlyContinue)) {
-            if ($line -notmatch 'TTA MCP Server is ready') { continue }
-            try {
-                $entry = $line | ConvertFrom-Json
-                $port = [int]$entry.port
-                if ($port -ge 1 -and $port -le 65535) { return $port }
-            } catch { }
-        }
-    }
-    return $null
-}
-
 # Installation root for the TTA MCP IIS application.
 # The archive contents are placed under <root>\releases\<version>.
 function Get-InstallRoot {
@@ -564,35 +547,23 @@ Write-Output "Health:   $healthUrl"
 Write-Output "MCP URL:  $origin$basePath/tta-mcp"
 if ($health) { Write-Output 'Health check: ready' } else { Write-Warning "The app did not answer the HTTPS health check yet. Review IIS/HttpPlatformHandler logs in '$logDirectory'." }
 
-if (-not $SkipBootstrapCode) {
-    if (-not $health -or $health.status -ne 'ready') {
-        Write-Warning 'The HTTPS readiness check did not succeed; the bootstrap code was not requested. Fix IIS/HttpPlatformHandler startup first and rerun the installer.'
-    } else {
-        $port = Get-LatestReadyPort $logDirectory
-        if ($port) {
-            try {
-                $localBase = "http://127.0.0.1:$port$basePath"
-                $live = Invoke-RestMethod -Uri "$localBase/health/live" -Method Get -TimeoutSec 5
-                if ([string]$live.version -ne [string]$runtimeInfo.appVersion) {
-                    throw 'The local IIS worker version does not match the deployed release.'
-                }
-                $setup = Invoke-RestMethod -Uri "$localBase/api/setup" -Method Get -TimeoutSec 5
-                if ($setup.required -and $setup.setupCode) {
-                    Write-Host ''
-                    Write-Host 'Jednorázový instalační kód správce (zadejte ho do Admin UI):' -ForegroundColor Yellow
-                    Write-Host $setup.setupCode -ForegroundColor Yellow
-                    Write-Host 'Kód platí 30 minut a po založení správce přestane fungovat.' -ForegroundColor Yellow
-                } elseif (-not $setup.required) {
-                    Write-Output 'Initial administrator already exists; sign in with the existing account.'
-                } else {
-                    Write-Warning 'IIS app is running, but the one-time setup code was not available. Run this script locally again or inspect the IIS application logs.'
-                }
-            } catch {
-                Write-Warning "Could not verify the current local IIS worker or retrieve its one-time setup code. Review '$logDirectory' and restart the app pool if required."
-            }
-        } else {
-            Write-Warning "Could not read the IIS worker port from '$logDirectory'; use the HTTPS health URL and review the HttpPlatformHandler startup logs."
+if ($health -and $health.status -eq 'ready') {
+    try {
+        $live = Invoke-RestMethod -Uri "$origin$basePath/health/live" -Method Get -TimeoutSec 5
+        if ([string]$live.version -ne [string]$runtimeInfo.appVersion) {
+            throw 'The IIS HTTPS endpoint returned a different application version than the deployed package.'
         }
+        Write-Output "Version:  $($live.version)"
+        $setup = Invoke-RestMethod -Uri "$origin$basePath/api/setup" -Method Get -TimeoutSec 5
+        if (-not $setup.required) {
+            Write-Output 'Initial administrator already exists; sign in with the existing account.'
+        } elseif ($setup.setupCodeRequired) {
+            Write-Warning 'The deployed app still requires a local setup code. Check that the IIS package enables TTA_IIS_FIRST_RUN_SETUP and recycle the application pool.'
+        } else {
+            Write-Output "First administrator setup: $origin$basePath/ (open this HTTPS URL in a browser)."
+        }
+    } catch {
+        Write-Warning 'Could not verify first-run setup through the IIS HTTPS URL. Review the health endpoint and IIS/HttpPlatformHandler logs.'
     }
 }
 

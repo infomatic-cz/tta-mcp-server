@@ -2,7 +2,7 @@
 
 Samostatný MCP server pro správu připojení Tungsten TotalAgility a přístupů MCP klientů. Aplikace nabízí React administrační rozhraní, Fastify API, MCP přes Streamable HTTP a `stdio`, audit a SQLite úložiště.
 
-**Verze 0.3.3.** IIS varianta zachovává stejné TTA a MCP funkce a přidává hostování jako IIS aplikace. Konektor používá REST API `/services/sdk/v1`, jeho odpověď validace `IsValid` a autorizační hlavičku TTA session ID. Podporuje interní jméno/heslo, alternativní `SYSTEM_SESSION_ID`, read-only nástroje pro joby a aktivity. Zápisové operace, dokumenty, uživatelé, Designer, PostgreSQL, Docker a plné RBAC zůstávají mimo tento release; viz [aktuální rozsah](docs/TTA_CAPABILITIES.md).
+**Verze 0.3.4.** IIS varianta zachovává stejné TTA a MCP funkce a přidává hostování jako IIS aplikace. Konektor používá REST API `/services/sdk/v1`, jeho odpověď validace `IsValid` a autorizační hlavičku TTA session ID. Podporuje interní jméno/heslo, alternativní `SYSTEM_SESSION_ID`, read-only nástroje pro joby a aktivity. Zápisové operace, dokumenty, uživatelé, Designer, PostgreSQL, Docker a plné RBAC zůstávají mimo tento release; viz [aktuální rozsah](docs/TTA_CAPABILITIES.md).
 
 ## Nasazení na IIS
 
@@ -14,7 +14,7 @@ Na pracovní stanici vytvořte balíček příkazem `New-Build.ps1`; ZIP i samos
 .\Install-TTA-MCP.ps1
 ```
 
-Přístup bude `https://tta-mcp.example.cz/tta-mcp/`; instalační skript odvodí hostname z existující HTTPS vazby IIS. Při více hostnames vybere první HTTPS vazbu; konkrétní název lze určit parametrem `-ServerHost`.
+Přístup bude `https://tta-mcp.example.cz/tta-mcp/`; instalační skript odvodí hostname z existující HTTPS vazby IIS. Při více hostnames vybere první HTTPS vazbu; konkrétní název lze určit parametrem `-ServerHost`. První účet správce vytvoříte v průvodci přímo na této HTTPS adrese. IIS instalace nevyžaduje otevření portu 8380 ani lokální setup přes další adresu.
 
 ## Rychlý start ve Windows
 
@@ -73,7 +73,7 @@ Pro `stdio` se nepoužívá vzdálený API token; oprávnění odpovídá lokál
 - Administrační cookie je HttpOnly, SameSite=Strict a na vzdálené instalaci Secure. Mutující administrační API kontroluje Origin.
 - Výchozí síťový bind je loopback; TTA adresa vyžaduje HTTPS, pokud administrátor výslovně nepovolí HTTP.
 - MCP token lze omezit na vybraná prostředí, expirovat a okamžitě revokovat.
-- TTA operace v 0.3.3 jsou pouze read-only a volají konkrétní REST endpointy z allowlistu. Test spojení ověřuje REST login a `IsValid`; neprokazuje automaticky oprávnění pro každé TTA query.
+- TTA operace v 0.3.4 jsou pouze read-only a volají konkrétní REST endpointy z allowlistu. Test spojení ověřuje REST login a `IsValid`; neprokazuje automaticky oprávnění pro každé TTA query.
 - `SYSTEM_SESSION_ID` a TTA heslo se šifrují stejným vault klíčem. Zálohujte databázi a chráněný vault klíč společně.
 
 Podrobnosti: [Architektura](docs/ARCHITECTURE.md), [Konfigurace](docs/CONFIGURATION.md), [Bezpečnost](docs/SECURITY.md), [IIS](docs/INSTALLATION_IIS.md), [kompatibilita TTA](docs/TTA_API_COMPATIBILITY.md).

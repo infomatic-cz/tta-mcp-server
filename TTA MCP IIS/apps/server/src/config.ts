@@ -29,6 +29,7 @@ export interface AppConfig {
   allowedHosts: Set<string>;
   allowedOrigins: Set<string>;
   allowInsecureTtaHttp: boolean;
+  allowRemoteFirstSetup: boolean;
 }
 
 function readVaultKey(): Buffer {
@@ -94,6 +95,10 @@ export function loadConfig(): AppConfig {
     }
   }
   const cookieSecure = booleanValue(process.env.TTA_COOKIE_SECURE, Boolean(publicOrigin));
+  const allowRemoteFirstSetup = booleanValue(process.env.TTA_IIS_FIRST_RUN_SETUP, false);
+  if (allowRemoteFirstSetup && (!publicOrigin || !cookieSecure)) {
+    throw new Error("TTA_IIS_FIRST_RUN_SETUP requires an HTTPS TTA_PUBLIC_ORIGIN and secure cookies.");
+  }
   if (host !== "127.0.0.1" && host !== "::1" && host !== "localhost" && !publicOrigin) {
     throw new Error("Set TTA_PUBLIC_ORIGIN before binding the app outside loopback.");
   }
@@ -118,6 +123,7 @@ export function loadConfig(): AppConfig {
     allowedHosts,
     allowedOrigins,
     allowInsecureTtaHttp: booleanValue(process.env.TTA_ALLOW_INSECURE_HTTP, false),
+    allowRemoteFirstSetup,
   };
 }
 

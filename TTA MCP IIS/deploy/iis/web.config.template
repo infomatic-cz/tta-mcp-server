@@ -21,6 +21,7 @@
         <environmentVariable name="TTA_VAULT_KEY_DPAPI_FILE" value="@@DPAPI_KEY_FILE@@" />
         <environmentVariable name="TTA_PUBLIC_ORIGIN" value="@@PUBLIC_ORIGIN@@" />
         <environmentVariable name="TTA_COOKIE_SECURE" value="true" />
+        <environmentVariable name="TTA_IIS_FIRST_RUN_SETUP" value="true" />
         <environmentVariable name="NODE_OPTIONS" value="--use-system-ca" />
       </environmentVariables>
     </httpPlatform>

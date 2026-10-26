@@ -5,7 +5,7 @@ Plán popisuje ověřitelné schopnosti dostupné v aplikaci a dokumentaci. Neoz
 | Oblast | Ověření požadované před produkčním víceuživatelským provozem |
 |---|---|
 | Build | Čistý Windows x64 build ze source mirroru mimo OneDrive a kontrola obsahu IIS ZIP balíčku. |
-| První účet | Jednorázový lokální setup, neplatný kód, vypršení kódu, duplicitní setup. |
+| První účet | IIS průvodce přes HTTPS bez lokálního portu, setup jen při prázdném seznamu uživatelů, souběžné/duplicitní založení; lokální režim s loopback setup kódem. |
 | Přihlášení | Argon2id ověření, chybné heslo, rate limit, expirace/revokace session, cookie flags. |
 | Tajemství | AES-GCM roundtrip, změna ciphertextu, DB bez vault key, logy bez secretů, Windows DPAPI lifecycle a ACL IIS aplikačního poolu. |
 | API | CSRF/Origin, Host header, login throttling, URL validace, body limit, audit sanitizace. |

@@ -1,5 +1,13 @@
 # Výsledky ověření
 
+## 0.3.4 (2026-10-26)
+
+- Windows x64 build proběhl mimo OneDrive a vytvořil `C:\Temp\TTAMCP-Build\IIS\tta-mcp-server-iis-0.3.4-windows-x64.zip` i samostatný `C:\Temp\TTAMCP-Build\IIS\Install-TTA-MCP.ps1`.
+- TypeScript/Vite build proběhl úspěšně. IIS šablona předává `TTA_IIS_FIRST_RUN_SETUP=true`; runtime toto nastavení odmítne bez HTTPS originu a Secure cookie.
+- Cílený smoke test nad zabaleným runtime na cestě `/tta-mcp` s IIS proměnnými ověřil stav průvodce bez lokálního kódu, odmítnutí požadavků bez `Origin` a s HTTP `Origin`, vytvoření prvního správce s očekávaným HTTPS `Origin`, zabezpečenou session cookie, zavření průvodce, odmítnutí druhého setup pokusu a načtení UI.
+- PowerShell parser ověřil instalační, build a lokální spouštěcí skript. Instalační skript po nasazení kontroluje verzi a stav průvodce přes HTTPS IIS URL; nečte interní port HttpPlatformHandler ani nevypisuje bootstrap kód. ZIP obsahuje instalační skript samostatně i uvnitř archivu.
+- Skutečný IIS server, TLS binding a HttpPlatformHandler nebyly v tomto prostředí dostupné; smoke test ověřuje aplikační chování s IIS cestou, hlavičkami a proměnnými, nikoli skutečnou TLS vazbu ani nasazení na cílový IIS. Automatizovaná regresní sada nebyla spuštěna.
+
 ## 0.3.3 (2026-10-26)
 
 - Windows x64 build proběhl mimo OneDrive. `New-Build.ps1` vytvořil ZIP `C:\Temp\TTAMCP-Build\IIS\tta-mcp-server-iis-0.3.3-windows-x64.zip` a samostatný `C:\Temp\TTAMCP-Build\IIS\Install-TTA-MCP.ps1`.

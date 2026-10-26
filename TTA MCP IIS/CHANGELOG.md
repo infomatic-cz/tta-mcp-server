@@ -2,6 +2,14 @@
 
 Změny jsou řazeny od nejnovější verze. Projekt používá Semantic Versioning.
 
+## [0.3.4] – 2026-10-26
+
+### Změněno
+- IIS první účet správce se zakládá přímo v průvodci přes existující HTTPS adresu na portu 443, bez lokálního setup kódu nebo přístupu na port 8380.
+- Instalátor již nečte dynamický port procesu ani nevypisuje setup kód; stav prvního nastavení ověřuje přes veřejnou HTTPS URL IIS.
+- Lokální ne-IIS režim si ponechává jednorázový setup kód omezený na loopback.
+- Dokumentace popisuje IIS první spuštění, ochranu nevyužitého setup průvodce a nové runtime nastavení.
+
 ## [0.3.3] – 2026-10-26
 
 ### Změněno
