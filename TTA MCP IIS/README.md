@@ -2,7 +2,7 @@
 
 Samostatný MCP server pro správu připojení Tungsten TotalAgility a přístupů MCP klientů. Aplikace nabízí React administrační rozhraní, Fastify API, MCP přes Streamable HTTP a `stdio`, audit a SQLite úložiště.
 
-**Verze 0.3.4.** IIS varianta zachovává stejné TTA a MCP funkce a přidává hostování jako IIS aplikace. Konektor používá REST API `/services/sdk/v1`, jeho odpověď validace `IsValid` a autorizační hlavičku TTA session ID. Podporuje interní jméno/heslo, alternativní `SYSTEM_SESSION_ID`, read-only nástroje pro joby a aktivity. Zápisové operace, dokumenty, uživatelé, Designer, PostgreSQL, Docker a plné RBAC zůstávají mimo tento release; viz [aktuální rozsah](docs/TTA_CAPABILITIES.md).
+**Verze 0.3.5.** IIS varianta hostuje aplikaci pod existující HTTPS vazbou. Konektor používá REST API `/services/sdk/v1`, interní přihlášení jménem/heslem nebo `SYSTEM_SESSION_ID` a oddělené MCP nástroje pro čtení a zápis. Dynamicky načítá REST Swagger každého TTA připojení a umožní volat jeho deklarované JSON/form operace; zápis vyžaduje potvrzení `operationId`. Rozhraní mimo konkrétní REST Swagger (například jiné SDK služby) se automaticky nepředstírá jako podporované; viz [aktuální rozsah](docs/TTA_CAPABILITIES.md).
 
 ## Nasazení na IIS
 
@@ -46,6 +46,8 @@ Výstupy jsou v časově označené složce `C:\Temp\TTAMCP-Build\IIS\release-<v
 
 V konzoli otevřete **TTA připojení → Přidat připojení**. Zadejte název, základní HTTPS adresu a typ instalace. Výchozí cesta REST API je `/services/sdk/v1`. Pro Swagger URL `https://tta.example/TotalAgility/swagger/ui/index#/Job` zadejte jako základ `https://tta.example/TotalAgility`; aplikace umí zpracovat i vložený odkaz Swagger UI. Kontext `/TotalAgility` musí být součástí základní adresy.
 
+MCP klient nejdříve zavolá `tta_api_operations` s `connectionId` a podle výsledného operationId použije `tta_api_read` (jen GET) nebo `tta_api_write` (POST/PUT/PATCH/DELETE). Zápis vyžaduje, aby `confirmOperationId` přesně odpovídalo `operationId`; oprávnění dále kontroluje TTA účet. Upload souboru používá formData JSON s `fileName`, `contentType` a `dataBase64`; velikost požadavku i odpovědi je omezena na 2 MB.
+
 Pro běžné interní přihlášení vyberte **Interní uživatel a heslo** a zadejte TTA uživatelské jméno a heslo. REST login odešle `UserName`, `Password` a `UnconditionalLogOn: false`. V režimu `SYSTEM_SESSION_ID` zadejte do pole uživatele jméno TTA účtu, pro který má TTA vytvořit relaci; toto jméno se posílá jako `UserId`. Použijte uživatelský tvar přesně tak, jak ho zná TTA, včetně domény, například `im\vraj`. Do pole `SYSTEM_SESSION_ID` patří systémový GUID z nastavení TotalAgility **System → System settings → Logon and authentication → User sessions**. ID se předává v hlavičce `Authorization`, uživatelské jméno v těle požadavku. Uložené tajemství se šifruje AES-256-GCM. Session ID se drží jen v paměti procesu.
 
 Tlačítko **Test REST API** zavolá `POST /users/sessions`, přečte `SessionId` a `LogOnStateType`, poté ověří relaci endpointem `/users/sessions/{sessionId}/validate` a polem `IsValid`. Stav **API ověřeno** potvrzuje autentizaci REST API; oprávnění k jednotlivým jobům a query stále řídí účet v TTA. HTTP 401/403 obvykle značí zamítnuté přihlašovací údaje nebo oprávnění; 404 znamená chybnou základní URL či cestu API.
@@ -73,7 +75,8 @@ Pro `stdio` se nepoužívá vzdálený API token; oprávnění odpovídá lokál
 - Administrační cookie je HttpOnly, SameSite=Strict a na vzdálené instalaci Secure. Mutující administrační API kontroluje Origin.
 - Výchozí síťový bind je loopback; TTA adresa vyžaduje HTTPS, pokud administrátor výslovně nepovolí HTTP.
 - MCP token lze omezit na vybraná prostředí, expirovat a okamžitě revokovat.
-- TTA operace v 0.3.4 jsou pouze read-only a volají konkrétní REST endpointy z allowlistu. Test spojení ověřuje REST login a `IsValid`; neprokazuje automaticky oprávnění pro každé TTA query.
+- Pojmenované job/activity nástroje zůstávají read-only. Verze 0.3.5 navíc zpřístupňuje GET a write operace deklarované REST Swaggerem přes oddělené MCP nástroje; zápis vyžaduje `confirmOperationId`. Test připojení ověřuje login a `IsValid`, ne oprávnění ke každému API.
+- `ECONNRESET` se hlásí s fází požadavku. Důvěra certifikátu pouze vypíná jeho kontrolu; reset TCP/TLS musí řešit dostupnost endpointu nebo IIS/proxy/WAF.
 - `SYSTEM_SESSION_ID` a TTA heslo se šifrují stejným vault klíčem. Zálohujte databázi a chráněný vault klíč společně.
 
 Podrobnosti: [Architektura](docs/ARCHITECTURE.md), [Konfigurace](docs/CONFIGURATION.md), [Bezpečnost](docs/SECURITY.md), [IIS](docs/INSTALLATION_IIS.md), [kompatibilita TTA](docs/TTA_API_COMPATIBILITY.md).

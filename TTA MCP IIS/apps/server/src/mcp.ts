@@ -5,7 +5,7 @@ import { z } from "zod/v4";
 import type { Store, ConnectionRow, TokenRow } from "./store.js";
 import type { Vault } from "./vault.js";
 import { digest, newOpaqueToken } from "./security.js";
-import { callTtaApi, probeConnection, safeConnection, TtaSdkError } from "./tta.js";
+import { callTtaApi, callTtaSwaggerOperation, describeTtaSwaggerOperation, getTtaSwaggerOperations, probeConnection, safeConnection, TtaSdkError, withTtaSession } from "./tta.js";
 
 interface Grant {
   tokenId: string;
@@ -46,7 +46,7 @@ function mayAccess(grant: Grant, id: string): boolean {
 }
 
 function createTools(store: Store, vault: Vault, grant: Grant) {
-  const server = new McpServer({ name: "tta-mcp-server", version: "0.3.4" });
+  const server = new McpServer({ name: "tta-mcp-server", version: "0.3.5" });
   server.registerTool("tta_connections_list", {
     description: "Vrátí pouze TTA připojení povolená tomuto MCP klientovi. Neobsahuje přihlašovací údaje.",
     inputSchema: z.object({}),
@@ -151,6 +151,84 @@ function createTools(store: Store, vault: Vault, grant: Grant) {
         ...(typeof input.activityStatus === "number" ? { activityStatus: input.activityStatus } : {}),
       },
     }));
+
+  const swaggerConnection = (connectionId: string, action: string): ConnectionRow | null => {
+    const row = store.db.prepare("SELECT * FROM connections WHERE id=? AND enabled=1").get(connectionId) as ConnectionRow | undefined;
+    if (!row || !mayAccess(grant, row.id)) {
+      store.audit(`mcp:${grant.tokenId}`, action, connectionId, "DENIED");
+      return null;
+    }
+    return row;
+  };
+
+  server.registerTool("tta_api_operations", {
+    title: "Discover TTA REST operations",
+    description: "Načte operationId a parametry z REST Swaggeru vybraného TTA připojení. Zobrazí pouze operace deklarované tímto serverem.",
+    inputSchema: z.object({
+      connectionId: z.string().uuid(),
+      search: z.string().trim().max(200).optional(),
+      offset: z.number().int().min(0).default(0),
+      limit: z.number().int().min(1).max(100).default(50),
+    }),
+    annotations: { readOnlyHint: true, destructiveHint: false },
+  }, async ({ connectionId, search, offset, limit }) => {
+    const row = swaggerConnection(connectionId, "tta.api.operations");
+    if (!row) return { ...textResult({ error: { code: "ACCESS_DENIED", message: "Připojení neexistuje nebo k němu tento MCP klient nemá přístup." } }), isError: true };
+    try {
+      const operations = await withTtaSession(vault, row, (sessionId) => getTtaSwaggerOperations(row, sessionId));
+      const needle = search?.toLowerCase() ?? "";
+      const filtered = operations.filter((operation) => !needle || `${operation.operationId} ${operation.method} ${operation.path} ${operation.summary ?? ""} ${operation.description ?? ""}`.toLowerCase().includes(needle));
+      store.audit(`mcp:${grant.tokenId}`, "tta.api.operations", row.id, "SUCCESS");
+      return textResult({ connectionId, total: filtered.length, offset, limit, operations: filtered.slice(offset, offset + limit).map(describeTtaSwaggerOperation) });
+    } catch (error) {
+      store.audit(`mcp:${grant.tokenId}`, "tta.api.operations", row.id, "FAILED");
+      return { ...textResult({ connectionId, error: resultError(error) }), isError: true };
+    }
+  });
+
+  const swaggerCallSchema = z.object({
+    connectionId: z.string().uuid(),
+    operationId: z.string().trim().min(1).max(240),
+    pathParameters: z.record(z.string(), z.unknown()).default({}),
+    queryParameters: z.record(z.string(), z.unknown()).default({}),
+    headerParameters: z.record(z.string(), z.unknown()).default({}),
+    body: z.unknown().optional(),
+    formData: z.record(z.string(), z.unknown()).default({}),
+  });
+  const callSwagger = async (input: z.infer<typeof swaggerCallSchema>, mode: "READ" | "WRITE") => {
+    const action = mode === "READ" ? "tta.api.read" : "tta.api.write";
+    const row = swaggerConnection(input.connectionId, action);
+    if (!row) return { ...textResult({ error: { code: "ACCESS_DENIED", message: "Připojení neexistuje nebo k němu tento MCP klient nemá přístup." } }), isError: true };
+    try {
+      const start = Date.now();
+      const result = await callTtaSwaggerOperation(vault, row, input.operationId, input, mode);
+      store.audit(`mcp:${grant.tokenId}`, `${action}.${input.operationId}`, row.id, "SUCCESS");
+      return textResult({ connectionId: row.id, operationId: input.operationId, method: result.method, durationMs: Date.now() - start, data: safeTtaOutput(result.data) });
+    } catch (error) {
+      store.audit(`mcp:${grant.tokenId}`, `${action}.${input.operationId}`, row.id, "FAILED");
+      return { ...textResult({ connectionId: row.id, operationId: input.operationId, error: resultError(error) }), isError: true };
+    }
+  };
+
+  server.registerTool("tta_api_read", {
+    title: "Call a Swagger-declared TTA GET operation",
+    description: "Provede pouze GET operaci nalezenou pomocí tta_api_operations. Parametry a cesta se validují podle Swaggeru daného připojení.",
+    inputSchema: swaggerCallSchema,
+    annotations: { readOnlyHint: true, destructiveHint: false },
+  }, async (input) => callSwagger(input, "READ"));
+
+  server.registerTool("tta_api_write", {
+    title: "Call a Swagger-declared TTA write operation",
+    description: "Provede pouze POST/PUT/PATCH/DELETE operaci nalezenou pomocí tta_api_operations. Před voláním musí uživatel potvrdit konkrétní operationId a vyplnit confirmOperationId přesně stejnou hodnotou.",
+    inputSchema: swaggerCallSchema.extend({ confirmOperationId: z.string().trim().min(1).max(240) }),
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  }, async (input) => {
+    if (input.confirmOperationId !== input.operationId) {
+      store.audit(`mcp:${grant.tokenId}`, "tta.api.write.confirm", input.connectionId, "DENIED");
+      return { ...textResult({ error: { code: "WRITE_CONFIRMATION_REQUIRED", message: "Pro zápis zopakujte operationId v confirmOperationId až po výslovném potvrzení konkrétní operace uživatelem." } }), isError: true };
+    }
+    return callSwagger(input, "WRITE");
+  });
   return server;
 }
 

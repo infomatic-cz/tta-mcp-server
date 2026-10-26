@@ -11,8 +11,8 @@ Plán popisuje ověřitelné schopnosti dostupné v aplikaci a dokumentaci. Neoz
 | API | CSRF/Origin, Host header, login throttling, URL validace, body limit, audit sanitizace. |
 | MCP | SDK handshake, tool list/call, HTTP bearer validation, token scope izolace, expiry/revocation, stdio framing. |
 | SQLite | Schéma, WAL, souběžný přístup, backup/restore, disk full. |
-| TTA adaptér | Každá metoda ověřena proti oficiálnímu SDK/REST kontraktu a konkrétní verzi instalace. |
+| TTA adaptér | Swagger discovery v2, stránkování a filtering; GET/JSON/formData/binary operace; request path/body validation; connection scope; write confirmation; redirects, TLS, timeout, connection reset stage diagnostics. |
 | UI | První setup, login, připojení CRUD, token create/revoke, menší viewport a přístupnost. |
 | IIS | AppCmd discovery, HTTPS binding 443, virtuální cesta, předání `HTTP_PLATFORM_PORT`, pool identity/ACL, šifrování hesla custom identity, health endpointy a rollback. |
 
-Před každým skutečným TTA testem používat testovací instalaci a pouze bezpečné čtecí operace. Destruktivní operace nejsou implementovány.
+Před každým skutečným TTA testem používat testovací instalaci. Zápisové a destruktivní metody zkoušet jen na izolovaných datech a po ověření dopadu konkrétního operationId. Každá metoda zůstává omezená na endpointy deklarované Swaggerem a účetní oprávnění TTA.

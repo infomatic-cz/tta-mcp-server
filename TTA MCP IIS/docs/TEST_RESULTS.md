@@ -1,5 +1,12 @@
 # Výsledky ověření
 
+## 0.3.5 (2026-10-26)
+
+- Windows x64 build proběhl mimo OneDrive a vytvořil `C:\Temp\TTAMCP-Build\IIS\tta-mcp-server-iis-0.3.5-windows-x64.zip`, samostatný instalační skript a release cestu v `C:\Temp\TTAMCP-Build\IIS\latest-release.txt`.
+- TypeScript a Vite build proběhly úspěšně. MCP server zahrnuje dynamickou Swagger discovery, oddělené GET/write nástroje, potvrzení write operationId, JSON/formData requesty s limitem 2 MB, binární odpověď v base64 a fázovou diagnostiku připojení.
+- Neověřený TLS agent nyní nepoužívá keep-alive sockety. `ECONNRESET` detail uvádí, zda selhal interní login, SSO, validace relace nebo Swagger/API operace.
+- Automatizovaná regresní sada nebyla spuštěna. Konkrétní TTA Swagger endpoint nebyl z tohoto prostředí síťově dostupný (požadavek vypršel); discovery a operace proto nejsou ověřené na cílovém tenantovi. IIS server ani cílový TLS binding nebyly nasazeny/ověřeny.
+
 ## 0.3.4 (2026-10-26)
 
 - Windows x64 build proběhl mimo OneDrive a vytvořil `C:\Temp\TTAMCP-Build\IIS\tta-mcp-server-iis-0.3.4-windows-x64.zip` i samostatný `C:\Temp\TTAMCP-Build\IIS\Install-TTA-MCP.ps1`.

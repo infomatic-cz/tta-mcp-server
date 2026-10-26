@@ -2,7 +2,7 @@
 
 ## Swagger instance uživatele
 
-Konektor 0.2.9 vychází z [TTA REST Swaggeru](https://winserver-tta26.im.cz/TotalAgility/swagger/ui/index#/Job), který uživatel poskytl, a z jeho [OpenAPI v1 JSON](https://winserver-tta26.im.cz/TotalAgility/swagger/docs/v1). Specifikace uvádí `basePath: /TotalAgility`, HTTPS a REST cesty `/services/sdk/v1/...`. Samotný Swagger neuvádí produktovou verzi TTA; název hostitele se za důkaz verze nepovažuje.
+Konektor byl původně ověřen proti [TTA REST Swaggeru](https://winserver-tta26.im.cz/TotalAgility/swagger/ui/index#/Job) a jeho [OpenAPI v1 JSON](https://winserver-tta26.im.cz/TotalAgility/swagger/docs/v1). Verze 0.3.5 načítá stejný kontrakt dynamicky z každého připojení. Příklad specifikace uvádí `basePath: /TotalAgility` a REST cesty `/services/sdk/v1/...`; samotný Swagger neuvádí produktovou verzi TTA.
 
 | Vlastnost | Hodnota z OpenAPI |
 |---|---|
@@ -34,7 +34,7 @@ Pro další chráněné REST operace Swagger vyžaduje hlavičku `Authorization`
 
 Verze 0.2.0 posílala požadavky na WCF/SDK JSON adresy jako `/Services/Sdk/UserService.svc/json/GetSessionWithPassword`. Dodaný Swagger popisuje pro tuto instanci REST rozhraní na `/services/sdk/v1/...`. Předchozí validace navíc očekávala `SessionId` z odpovědi validate, zatímco Swaggerův model vrací `IsValid`. Obě chyby jsou opravené v 0.2.1.
 
-### Implementované read-only REST operace
+### Pojmenované read-only REST operace
 
 | MCP nástroj | TTA endpoint | Parametry |
 |---|---|---|
@@ -49,9 +49,15 @@ Verze 0.2.0 posílala požadavky na WCF/SDK JSON adresy jako `/Services/Sdk/User
 | `tta_activities_workqueue` | `GET /activities/workqueue` | `queryName`; TTA uplatní role a dovednosti uživatele |
 | `tta_activities_count` | `GET /activities/count` | `queryName`, `jobId` nebo `activityStatus` |
 
-Vstupy jsou validované, cesty jsou pevně dané allowlistem, TTA oprávnění zůstávají vynucená cílovým serverem. Odpovědi mají limit 2 MB a výstupy redigují citlivá pole i hodnoty proměnných, jejichž názvy obsahují například `password`, `secret`, `token` nebo `credential`.
+Tyto pojmenované nástroje zůstávají pohodlnou typovanou zkratkou. Vstupy jsou validované, cesty jsou pevně dané a TTA oprávnění vynucuje cílový server.
 
-Swagger tohoto serveru neobsahuje endpointy pro seznam definic procesů a jejich Designer metadata, proto je konektor již nenabízí pod nesprávnými SDK názvy. REST API obsahuje i write endpointy, ale tento MCP server je nevystavuje.
+### Dynamické REST Swagger nástroje
+
+MCP `tta_api_operations` získá `GET {baseUrl}/swagger/docs/v1` s TTA session ID a vrátí stránkovaný seznam operací. `tta_api_read` volá pouze operace `GET`. `tta_api_write` volá deklarované `POST`, `PUT`, `PATCH` a `DELETE` operace; vyžaduje přesné zopakování operationId v `confirmOperationId` a nese MCP anotaci `destructiveHint`. Cesta, HTTP metoda a parametry se berou ze Swaggeru, ne ze vstupu klienta. Host z definice se ignoruje a požadavek zůstává na nakonfigurovaném TTA originu.
+
+Vstupy zahrnují path/query/header parametry, JSON body a Swagger 2 `formData` včetně souboru s `fileName`, `contentType` a `dataBase64`. Binární odpovědi se vracejí jako base64. Request i response jsou omezené na 2 MB; redirecty se odmítají a známá citlivá pole se před návratem redigují. Přístup ke každému endpointu nadále určuje TTA účet.
+
+Dynamická plocha zahrnuje všechny podporované operace, které konkrétní REST Swagger deklaruje. Pokud daná instance ve Swaggeru nemá dokumentové, uživatelské, procesní nebo Designer endpointy, není možné je přes tyto REST nástroje volat. Toto není totéž co kompletní Tungsten SDK: oficiální SDK dokumentuje další servisní metody a také samostatné HTTP JSON/SOAP služby, které instance REST Swaggeru nemusí vystavovat.
 
 ## Ostatní požadované verze
 

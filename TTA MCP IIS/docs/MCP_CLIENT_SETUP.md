@@ -37,8 +37,13 @@ Nahraďte zástupný text cestou k projektu uloženému ve složce OneDrive. Kli
 
 - `tta_connections_list` — připojení povolená tokenu, bez tajných údajů.
 - `tta_connection_test` — TTA REST login a kontrola `IsValid` pro povolené připojení.
+- `tta_api_operations` — stránkovaný seznam operací, metod, cest a parametrů z konkrétního TTA REST Swaggeru.
+- `tta_api_read` — volá pouze Swaggerem deklarované GET operace.
+- `tta_api_write` — volá Swaggerem deklarované POST/PUT/PATCH/DELETE operace; klient musí zobrazit destruktivní anotaci a `confirmOperationId` musí přesně odpovídat operationId.
 - `tta_jobs_list`, `tta_jobs_count` — čtení jobů přes pojmenované TTA query.
 - `tta_job_details`, `tta_job_state`, `tta_job_history`, `tta_job_events`, `tta_job_variables` — read-only informace o jobu.
 - `tta_activities_query`, `tta_activities_workqueue`, `tta_activities_count` — read-only TTA activity query a workqueue.
 
-Připojení musí být nakonfigurované a otestované v admin konzoli. TTA odpovědi respektují účetní oprávnění. Query názvy před voláním vytvořte v TotalAgility. Zápis, dokumenty, uživatelé, procesní definice a Designer nejsou v ..3.1 vystavené.
+Příklad průzkumu: zavolejte `tta_api_operations` s `connectionId` a případně `search: "job"`. Pak použijte vrácené `operationId` a hodnoty v `pathParameters`, `queryParameters`, `headerParameters` nebo `body`. U write operace zavolejte `tta_api_write` s `confirmOperationId` nastaveným na stejné `operationId`. FormData file vložte jako `{ "fileName": "document.pdf", "contentType": "application/pdf", "dataBase64": "..." }`. Upload i odpovědi mají limit 2 MB.
+
+Připojení musí být nakonfigurované a otestované v admin konzoli. TTA odpovědi respektují účetní oprávnění. Query názvy před voláním vytvořte v TotalAgility. Dynamické nástroje pokrývají operace vystavené v REST Swaggeru daného připojení; SDK služby, které v tomto Swaggeru nejsou, nejsou automaticky volatelné.

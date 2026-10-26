@@ -18,9 +18,11 @@ Pro samotnou kryptografickou operaci je nutné tajemství načíst do paměti pr
 - Host allowlist, Origin allowlist pro browser požadavky, SameSite cookies, rate limit login/setup a omezená velikost JSON body.
 - Bez CORS wildcardu. `trustProxy` je vypnutý; `X-Forwarded-For` se nepoužívá pro autentizaci ani setup přístup.
 - TTA URL přijímá pouze HTTPS, pokud operátor nepovolí HTTP. REST redirecty se odmítají; URL credentials/query nejsou povolené. Swagger UI odkaz lze vložit a normalizuje se na základní URL.
-- Ověření certifikátu je standardně zapnuté. Volba „Důvěřovat certifikátu TTA“ se ukládá jednotlivě u profilu a používá neověřený TLS agent pouze pro toto připojení. Šifrování zůstává zapnuté, ale bez ověření certifikátu je možné podvržení serveru a odposlech přihlašovacích údajů; preferujte instalaci interní CA.
+- Ověření certifikátu je standardně zapnuté. Volba „Důvěřovat certifikátu TTA“ se ukládá jednotlivě u profilu a používá neověřený TLS agent pouze pro toto připojení; sockety se nepoužívají opakovaně, aby zavřená upstream spojení IIS/proxy nezpůsobovala reset na dalším požadavku. Šifrování zůstává zapnuté, ale bez ověření certifikátu je možné podvržení serveru a odposlech přihlašovacích údajů; preferujte instalaci interní CA.
 - MCP požadavky přes HTTP vyžadují bearer token a filtrují připojení podle jeho přiřazení.
-- MCP TTA volání jsou omezená na read-only REST allowlist; API chyby nevracejí surové tělo TTA.
+- `tta_api_operations` čte operace pouze z REST Swaggeru nakonfigurovaného TTA hostu. Specifikace nemůže změnit cílový host ani základní URL; cesty a query parametry se validují podle spec. Žádná libovolná URL ani metoda mimo GET/POST/PUT/PATCH/DELETE nejsou povolené.
+- `tta_api_read` odmítá jiné metody než GET. `tta_api_write` vyžaduje přesné zopakování `operationId` v `confirmOperationId`, je označené jako destruktivní MCP nástroj a TTA dále vynucuje oprávnění účtu. Provozovatel musí MCP klientovi přidělit jen důvěryhodný TTA účet a potvrzovat dopady write operací.
+- MCP TTA odpovědi redigují známá citlivá pole a binární obsah limitují na 2 MB; API chyby nevracejí surové tělo TTA.
 
 ## První účet
 
@@ -42,4 +44,4 @@ Audit obsahuje aktéra, typ akce, ID cíle, výsledek a čas. Nepřidává vstup
 
 ## Omezení ..3.1
 
-Vzdálené OAuth, víceuživatelské role, CSRF synchronizační token, rate limit s distribuovaným úložištěm, rotace klíčů, TTA write operace, dokumentové API a další version-specific adaptéry nejsou implementované. TTA endpoint, credentials a oprávnění musí být ověřeny proti cílovému tenantovi. IIS varianta potřebuje samostatné provozní ověření v cílovém prostředí před produkčním nasazením.
+Vzdálené OAuth, víceuživatelské role, CSRF synchronizační token, rate limit s distribuovaným úložištěm, rotace klíčů a SDK služby mimo instance-specific REST Swagger nejsou implementované. TTA endpoint, credentials a oprávnění musí být ověřeny proti cílovému tenantovi.

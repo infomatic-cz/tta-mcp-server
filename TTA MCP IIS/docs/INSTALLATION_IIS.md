@@ -16,7 +16,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 Hotový ZIP vznikne mimo OneDrive:
 
 ```text
-C:\Temp\TTAMCP-Build\IIS\tta-mcp-server-iis-0.3.4-windows-x64.zip
+C:\Temp\TTAMCP-Build\IIS\tta-mcp-server-iis-0.3.5-windows-x64.zip
 C:\Temp\TTAMCP-Build\IIS\Install-TTA-MCP.ps1
 ```
 

@@ -139,17 +139,58 @@ export interface ProbeResult {
 
 type JsonObject = Record<string, unknown>;
 type TtaCredentials = z.infer<typeof passwordCredentials> | z.infer<typeof systemSessionCredentials>;
-type RestMethod = "GET" | "POST";
+type RestMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 type QueryValue = string | number | boolean | undefined;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
-const unverifiedTlsAgent = new HttpsAgent({ keepAlive: true, rejectUnauthorized: false });
+// Do not reuse sockets for the opt-in unverified-certificate path. IIS/proxies
+// commonly close idle upstream sockets without a reliable keep-alive signal.
+const unverifiedTlsAgent = new HttpsAgent({ keepAlive: false, rejectUnauthorized: false });
 const sessionCache = new Map<string, string>();
 const sessionLocks = new Map<string, Promise<string>>();
 const sessionGenerations = new Map<string, number>();
 
+type SwaggerParameter = {
+  name: string;
+  in: string;
+  required?: boolean;
+  description?: string;
+  type?: string;
+  format?: string;
+  enum?: unknown[];
+  collectionFormat?: string;
+  schema?: JsonObject;
+};
+
+type SwaggerOperation = {
+  operationId: string;
+  method: RestMethod;
+  path: string;
+  summary?: string;
+  description?: string;
+  consumes?: string[];
+  produces?: string[];
+  parameters: SwaggerParameter[];
+  raw: JsonObject;
+};
+
+type SwaggerDocument = {
+  swagger?: string;
+  openapi?: string;
+  basePath?: string;
+  paths: Record<string, Record<string, unknown>>;
+  definitions?: Record<string, unknown>;
+  components?: { schemas?: Record<string, unknown> };
+  consumes?: string[];
+  produces?: string[];
+};
+
+const swaggerCache = new Map<string, { updatedAt: string; expiresAt: number; document: SwaggerDocument; operations: SwaggerOperation[] }>();
+const swaggerMethods = new Set<RestMethod>(["GET", "POST", "PUT", "PATCH", "DELETE"]);
+
 export function invalidateTtaSession(connectionId: string): void {
   sessionCache.delete(connectionId);
   sessionLocks.delete(connectionId);
+  swaggerCache.delete(connectionId);
   sessionGenerations.set(connectionId, (sessionGenerations.get(connectionId) ?? 0) + 1);
 }
 
@@ -196,13 +237,13 @@ function restUrl(row: ConnectionRow, route: string, query: Record<string, QueryV
   return url;
 }
 
-async function readLimitedBody(response: Response): Promise<string> {
+async function readLimitedBody(response: Response): Promise<Buffer> {
   const contentLength = Number(response.headers.get("content-length"));
   if (Number.isFinite(contentLength) && contentLength > MAX_RESPONSE_BYTES) {
     void response.body?.cancel().catch(() => undefined);
     throw new TtaSdkError("Odpověď TTA překročila limit 2 MB.", response.status);
   }
-  if (!response.body) return "";
+  if (!response.body) return Buffer.alloc(0);
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -219,7 +260,7 @@ async function readLimitedBody(response: Response): Promise<string> {
   const bytes = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-  return new TextDecoder().decode(bytes);
+  return Buffer.from(bytes);
 }
 
 function requestWithUnverifiedTls(url: URL, init: RequestInit): Promise<Response> {
@@ -230,11 +271,15 @@ function requestWithUnverifiedTls(url: URL, init: RequestInit): Promise<Response
       settled = true;
       reject(error);
     };
+    const requestBody = typeof init.body === "string" ? init.body
+      : init.body instanceof Uint8Array ? Buffer.from(init.body)
+        : undefined;
     const request = httpsRequest(url, {
       method: init.method,
       headers: {
         ...(init.headers as Record<string, string>),
-        ...(typeof init.body === "string" ? { "content-length": String(Buffer.byteLength(init.body)) } : {}),
+        connection: "close",
+        ...(requestBody !== undefined ? { "content-length": String(Buffer.byteLength(requestBody)) } : {}),
       },
       signal: init.signal ?? undefined,
       agent: unverifiedTlsAgent,
@@ -276,12 +321,13 @@ function requestWithUnverifiedTls(url: URL, init: RequestInit): Promise<Response
       });
     });
     request.once("error", fail);
-    if (typeof init.body === "string") request.write(init.body);
+    if (requestBody !== undefined) request.write(requestBody);
     request.end();
   });
 }
 
-function networkErrorDetail(error: unknown, allowUnverifiedCertificate: boolean): string {
+function networkErrorDetail(error: unknown, allowUnverifiedCertificate: boolean, requestLabel?: string): string {
+  const phase = requestLabel ? ` během ${requestLabel}` : "";
   let current: unknown = error;
   const seen = new Set<unknown>();
   for (let depth = 0; depth < 6 && current && !seen.has(current); depth += 1) {
@@ -291,15 +337,17 @@ function networkErrorDetail(error: unknown, allowUnverifiedCertificate: boolean)
       const code = typeof record.code === "string" ? record.code : "";
       if (/^(CERT_|ERR_TLS_CERT_|ERR_SSL_CERTIFICATE_VERIFY_FAILED|DEPTH_ZERO_SELF_SIGNED_CERT|SELF_SIGNED_CERT_IN_CHAIN|UNABLE_TO_VERIFY_LEAF_SIGNATURE)/.test(code)) {
         return allowUnverifiedCertificate
-          ? `TLS handshake s TTA selhal i s vypnutou kontrolou důvěryhodnosti certifikátu (${code}). Zkontrolujte podporované TLS protokoly a certifikát serveru.`
-          : `Ověření TLS certifikátu TTA selhalo (${code}). Nainstalujte interní CA do systémového úložiště, nebo pro toto připojení výslovně zapněte „Důvěřovat certifikátu TTA“.`;
+          ? `TLS handshake s TTA selhal${phase} i s vypnutou kontrolou důvěryhodnosti certifikátu (${code}). Zkontrolujte podporované TLS protokoly a certifikát serveru.`
+          : `Ověření TLS certifikátu TTA selhalo${phase} (${code}). Nainstalujte interní CA do systémového úložiště, nebo pro toto připojení výslovně zapněte „Důvěřovat certifikátu TTA“.`;
       }
-      if (code === "ENOTFOUND" || code === "EAI_AGAIN") return `Název TTA serveru se nepodařilo přeložit (${code}). Zkontrolujte DNS.`;
-      if (code === "ECONNREFUSED") return "TTA server odmítl síťové spojení. Zkontrolujte hostitele, port a firewall.";
-      if (code === "ECONNRESET") return "TTA REST API nebo síťový prostředník resetoval spojení před HTTP odpovědí (ECONNRESET). Volba důvěry certifikátu je aktivní; prověřte dostupnost /services/sdk/v1 na IIS, reverse proxy nebo WAF.";
-      if (["ETIMEDOUT", "EHOSTUNREACH", "ENETUNREACH", "EPIPE"].includes(code)) return `Síťové spojení k TTA selhalo před HTTP odpovědí (${code}). Zkontrolujte trasu, firewall a port.`;
-      if (/^(ERR_SSL_|ERR_TLS_)/.test(code)) return `TLS handshake s TTA selhal (${code}). Ověření certifikátu bylo vypnuto pro toto připojení; zkontrolujte TLS protokoly, šifry a případný požadavek na klientský certifikát.`;
-      if (code) return `Spojení s TTA selhalo před HTTP odpovědí (${code}). Zkontrolujte síťovou trasu a konfiguraci REST API.`;
+      if (code === "ENOTFOUND" || code === "EAI_AGAIN") return `Název TTA serveru se nepodařilo přeložit${phase} (${code}). Zkontrolujte DNS.`;
+      if (code === "ECONNREFUSED") return `TTA server odmítl síťové spojení${phase}. Zkontrolujte hostitele, port a firewall.`;
+      if (code === "ECONNRESET") return `TTA server nebo síťový prostředník resetoval spojení${phase} ještě před HTTP odpovědí (ECONNRESET). Volba důvěry certifikátu pouze přeskočí kontrolu certifikátu; reset spojení neodstraní. Zkontrolujte cílový endpoint, protokol TLS a log IIS/reverse proxy/WAF.`;
+      if (["ETIMEDOUT", "EHOSTUNREACH", "ENETUNREACH", "EPIPE"].includes(code)) return `Síťové spojení k TTA selhalo${phase} před HTTP odpovědí (${code}). Zkontrolujte trasu, firewall a port.`;
+      if (/^(ERR_SSL_|ERR_TLS_)/.test(code)) return allowUnverifiedCertificate
+        ? `TLS handshake s TTA selhal${phase} (${code}) i s vypnutou kontrolou certifikátu; zkontrolujte TLS protokoly, šifry a případný požadavek na klientský certifikát.`
+        : `TLS handshake s TTA selhal${phase} (${code}); zkontrolujte TLS protokoly, šifry a případný požadavek na klientský certifikát. Pokud je problém jen v interní CA, nainstalujte její kořenový certifikát do důvěryhodného úložiště.`;
+      if (code) return `Spojení s TTA selhalo${phase} před HTTP odpovědí (${code}). Zkontrolujte síťovou trasu a konfiguraci REST API.`;
       current = record.cause;
     } else {
       break;
@@ -309,23 +357,27 @@ function networkErrorDetail(error: unknown, allowUnverifiedCertificate: boolean)
 }
 
 async function restRequest<T = unknown>(row: ConnectionRow, method: RestMethod, route: string,
-  options: { query?: Record<string, QueryValue>; body?: JsonObject; authorization?: string; authentication?: boolean } = {}): Promise<T> {
-  const url = restUrl(row, route, options.query);
+  options: { query?: Record<string, QueryValue>; body?: unknown; contentType?: string; headers?: Record<string, string>; allowBinaryResponse?: boolean; authorization?: string; authentication?: boolean; requestUrl?: URL; requestLabel?: string } = {}): Promise<T> {
+  const url = options.requestUrl ?? restUrl(row, route, options.query);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), row.timeout_ms);
+  const encodedBody = options.body === undefined ? undefined
+    : typeof options.body === "string" || options.body instanceof Uint8Array ? options.body
+      : JSON.stringify(options.body);
   const headers: Record<string, string> = {
     accept: "application/json",
-    "user-agent": "TTA-MCP-Server/0.3.4",
+    "user-agent": "TTA-MCP-Server/0.3.5",
+    ...options.headers,
   };
   if (options.authorization) headers.authorization = options.authorization;
-  if (options.body) headers["content-type"] = "application/json; charset=utf-8";
+  if (encodedBody !== undefined) headers["content-type"] = options.contentType ?? "application/json; charset=utf-8";
   try {
     const init: RequestInit = {
       method,
       redirect: "manual",
       signal: controller.signal,
       headers,
-      ...(options.body ? { body: JSON.stringify(options.body) } : {}),
+      ...(encodedBody !== undefined ? { body: encodedBody as unknown as BodyInit } : {}),
     };
     const response = row.trust_invalid_certificate && url.protocol === "https:"
       ? await requestWithUnverifiedTls(url, init)
@@ -344,22 +396,376 @@ async function restRequest<T = unknown>(row: ConnectionRow, method: RestMethod, 
     }
     if (response.status === 204) return null as T;
     const contentType = response.headers.get("content-type") ?? "";
-    const text = await readLimitedBody(response);
-    if (!text) return null as T;
-    if (!contentType.toLowerCase().includes("json")) throw new TtaSdkError("TTA REST API nevrátilo JSON. Zkontrolujte URL API a autentizaci.", response.status, "SDK_UNAVAILABLE");
-    try { return JSON.parse(text) as T; }
+    const bytes = await readLimitedBody(response);
+    if (bytes.length === 0) return null as T;
+    if (!contentType.toLowerCase().includes("json")) {
+      if (!options.allowBinaryResponse) throw new TtaSdkError("TTA REST API nevrátilo JSON. Zkontrolujte URL API a autentizaci.", response.status, "SDK_UNAVAILABLE");
+      return { contentType: contentType || "application/octet-stream", sizeBytes: bytes.length, dataBase64: bytes.toString("base64") } as T;
+    }
+    try { return JSON.parse(bytes.toString("utf8")) as T; }
     catch { throw new TtaSdkError("TTA REST API vrátilo neplatný JSON.", response.status, "SDK_UNAVAILABLE"); }
   } catch (error) {
     if (error instanceof TtaSdkError) throw error;
     const timeout = error instanceof Error && error.name === "AbortError";
-    throw new TtaSdkError(timeout ? "Vypršel časový limit požadavku na TTA REST API." : networkErrorDetail(error, Boolean(row.trust_invalid_certificate)));
+    const phase = options.requestLabel ? ` během ${options.requestLabel}` : "";
+    throw new TtaSdkError(timeout ? `Vypršel časový limit požadavku na TTA REST API${phase}.` : networkErrorDetail(error, Boolean(row.trust_invalid_certificate), options.requestLabel));
   } finally {
     clearTimeout(timer);
   }
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function mergeSwaggerParameters(...groups: unknown[]): SwaggerParameter[] {
+  const merged = new Map<string, SwaggerParameter>();
+  for (const group of groups) {
+    if (!Array.isArray(group)) continue;
+    for (const item of group) {
+      const parameter = asRecord(item);
+      if (typeof parameter?.name !== "string" || typeof parameter.in !== "string") continue;
+      const key = `${parameter.in}:${parameter.name}`;
+      merged.set(key, parameter as unknown as SwaggerParameter);
+    }
+  }
+  return [...merged.values()];
+}
+
+function parseSwaggerDocument(value: unknown): { document: SwaggerDocument; operations: SwaggerOperation[] } {
+  const root = asRecord(value);
+  const paths = asRecord(root?.paths);
+  if (!root || !paths || !(typeof root.swagger === "string" || typeof root.openapi === "string")) {
+    throw new TtaSdkError("TTA Swagger `/swagger/docs/v1` neobsahuje platnou OpenAPI definici.", null, "SDK_UNAVAILABLE");
+  }
+  const document = root as unknown as SwaggerDocument;
+  const operations: SwaggerOperation[] = [];
+  for (const [path, rawPathItem] of Object.entries(paths)) {
+    if (!path.startsWith("/") || path.includes("\\") || path.split("/").some((segment) => segment === "..")) continue;
+    const pathItem = asRecord(rawPathItem);
+    if (!pathItem) continue;
+    for (const [rawMethod, rawOperation] of Object.entries(pathItem)) {
+      const method = rawMethod.toUpperCase() as RestMethod;
+      if (!swaggerMethods.has(method)) continue;
+      const operation = asRecord(rawOperation);
+      if (!operation) continue;
+      const operationId = typeof operation.operationId === "string" && operation.operationId.trim()
+        ? operation.operationId.trim()
+        : `${method} ${path}`;
+      operations.push({
+        operationId,
+        method,
+        path,
+        ...(typeof operation.summary === "string" ? { summary: operation.summary } : {}),
+        ...(typeof operation.description === "string" ? { description: operation.description } : {}),
+        ...(Array.isArray(operation.consumes) ? { consumes: operation.consumes.filter((item): item is string => typeof item === "string") } : {}),
+        ...(Array.isArray(operation.produces) ? { produces: operation.produces.filter((item): item is string => typeof item === "string") } : {}),
+        parameters: mergeSwaggerParameters(pathItem.parameters, operation.parameters),
+        raw: operation,
+      });
+    }
+  }
+  if (operations.length === 0) throw new TtaSdkError("TTA Swagger neobsahuje podporované GET/POST/PUT/PATCH/DELETE operace.", null, "SDK_UNAVAILABLE");
+  return { document, operations };
+}
+
+function swaggerUrl(row: ConnectionRow): URL {
+  const url = new URL(row.base_url);
+  url.pathname = `${url.pathname.replace(/\/+$/, "")}/swagger/docs/v1`;
+  url.search = "";
+  url.hash = "";
+  return url;
+}
+
+export async function getTtaSwaggerOperations(row: ConnectionRow, sessionId: string): Promise<SwaggerOperation[]> {
+  const cached = swaggerCache.get(row.id);
+  if (cached && cached.updatedAt === row.updated_at && cached.expiresAt > Date.now()) return cached.operations;
+  const document = await restRequest<unknown>(row, "GET", "", {
+    requestUrl: swaggerUrl(row),
+    authorization: sessionId,
+    requestLabel: "načtení REST Swaggeru (GET /swagger/docs/v1)",
+  });
+  const parsed = parseSwaggerDocument(document);
+  swaggerCache.set(row.id, { updatedAt: row.updated_at, expiresAt: Date.now() + 5 * 60 * 1000, ...parsed });
+  return parsed.operations;
+}
+
+function swaggerParameterSummary(parameter: SwaggerParameter) {
+  const schema = parameter.schema;
+  const type = parameter.type ?? (typeof schema?.type === "string" ? schema.type : undefined)
+    ?? (typeof schema?.$ref === "string" ? schema.$ref : undefined);
+  return {
+    name: parameter.name,
+    in: parameter.in,
+    required: Boolean(parameter.required),
+    ...(type ? { type } : {}),
+    ...(parameter.format ? { format: parameter.format } : {}),
+    ...(parameter.description ? { description: parameter.description } : {}),
+    ...(Array.isArray(parameter.enum) ? { enum: parameter.enum } : {}),
+  };
+}
+
+export function describeTtaSwaggerOperation(operation: SwaggerOperation) {
+  const responses = asRecord(operation.raw.responses) ?? {};
+  return {
+    operationId: operation.operationId,
+    method: operation.method,
+    path: operation.path,
+    ...(operation.summary ? { summary: operation.summary } : {}),
+    ...(operation.description ? { description: operation.description.slice(0, 1000) } : {}),
+    parameters: operation.parameters.map(swaggerParameterSummary),
+    ...(Array.isArray(operation.raw.consumes) ? { consumes: operation.raw.consumes } : {}),
+    ...(Array.isArray(operation.raw.produces) ? { produces: operation.raw.produces } : {}),
+    responses: Object.fromEntries(Object.entries(responses).slice(0, 12).map(([status, raw]) => {
+      const response = asRecord(raw) ?? {};
+      const schema = asRecord(response.schema);
+      return [status, {
+        ...(typeof response.description === "string" ? { description: response.description.slice(0, 300) } : {}),
+        ...(typeof schema?.$ref === "string" ? { schema: schema.$ref } : typeof schema?.type === "string" ? { schema: schema.type } : {}),
+      }];
+    })),
+    ...(asRecord(operation.raw.requestBody) ? { requestBody: {
+      required: Boolean(asRecord(operation.raw.requestBody)?.required),
+      contentTypes: Object.keys(asRecord(asRecord(operation.raw.requestBody)?.content) ?? {}),
+    } } : {}),
+    ...(operation.parameters.find((parameter) => parameter.in === "body")?.schema
+      ? { bodySchema: operation.parameters.find((parameter) => parameter.in === "body")?.schema }
+      : {}),
+  };
+}
+
+function swaggerOperation(operations: SwaggerOperation[], operationId: string): SwaggerOperation {
+  const matches = operations.filter((operation) => operation.operationId === operationId);
+  if (matches.length !== 1) throw new TtaSdkError(matches.length ? "TTA Swagger obsahuje nejednoznačný operationId." : "OperationId není v Swaggeru tohoto připojení.", null, "SDK_UNAVAILABLE");
+  return matches[0]!;
+}
+
+function parameterValue(value: unknown, parameter: SwaggerParameter): string {
+  const formatScalar = (item: unknown): string => {
+    if (typeof item === "string" || typeof item === "number" || typeof item === "boolean") return String(item);
+    throw new TtaSdkError(`Parametr ${parameter.name} musí být text, číslo nebo boolean.`);
+  };
+  if (Array.isArray(value)) {
+    const separator = parameter.collectionFormat === "ssv" ? " "
+      : parameter.collectionFormat === "tsv" ? "\t"
+        : parameter.collectionFormat === "pipes" ? "|" : ",";
+    return value.map(formatScalar).join(separator);
+  }
+  return formatScalar(value);
+}
+
+function validateInputParameters(parameters: SwaggerParameter[], supplied: Record<string, unknown>, location: string): Record<string, string> {
+  const declarations = parameters.filter((parameter) => parameter.in === location);
+  const allowed = new Set(declarations.map((parameter) => parameter.name));
+  for (const key of Object.keys(supplied)) if (!allowed.has(key)) throw new TtaSdkError(`Parametr ${key} není v TTA Swaggeru deklarován jako ${location}.`);
+  const values: Record<string, string> = {};
+  for (const parameter of declarations) {
+    const value = supplied[parameter.name];
+    if (value === undefined || value === null) {
+      if (parameter.required) throw new TtaSdkError(`Chybí povinný parametr ${parameter.name} (${location}).`);
+      continue;
+    }
+    const formatted = parameterValue(value, parameter);
+    if (/[\r\n]/.test(formatted)) throw new TtaSdkError(`Parametr ${parameter.name} obsahuje nepovolený nový řádek.`);
+    if (Array.isArray(parameter.enum) && !parameter.enum.some((item) => String(item) === formatted)) throw new TtaSdkError(`Parametr ${parameter.name} nemá povolenou hodnotu podle TTA Swaggeru.`);
+    values[parameter.name] = formatted;
+  }
+  return values;
+}
+
+function resolvedBodySchema(schema: unknown, document: SwaggerDocument, depth = 0): Record<string, unknown> | null {
+  if (depth > 12) return null;
+  const record = asRecord(schema);
+  if (!record) return null;
+  if (typeof record.$ref === "string") {
+    const parts = record.$ref.split("/");
+    const name = parts[parts.length - 1];
+    const resolved = name ? document.definitions?.[name] ?? document.components?.schemas?.[name] : undefined;
+    return resolvedBodySchema(resolved, document, depth + 1);
+  }
+  return record;
+}
+
+function validateBodySchema(value: unknown, schemaValue: unknown, document: SwaggerDocument, label = "body", depth = 0): void {
+  if (depth > 12) return;
+  const schema = resolvedBodySchema(schemaValue, document, depth);
+  if (!schema) return;
+  const type = typeof schema.type === "string" ? schema.type : "object";
+  const valid = type === "object" ? Boolean(asRecord(value))
+    : type === "array" ? Array.isArray(value)
+      : type === "string" ? typeof value === "string"
+        : type === "integer" ? Number.isInteger(value)
+          : type === "number" ? typeof value === "number" && Number.isFinite(value)
+            : type === "boolean" ? typeof value === "boolean" : true;
+  if (!valid) throw new TtaSdkError(`Tělo požadavku neodpovídá TTA Swaggeru (${label} má být ${type}).`);
+  if (Array.isArray(schema.enum) && !schema.enum.some((item) => JSON.stringify(item) === JSON.stringify(value))) throw new TtaSdkError(`Tělo požadavku obsahuje nepovolenou hodnotu (${label}).`);
+  if (type === "object") {
+    const body = asRecord(value)!;
+    const required = Array.isArray(schema.required) ? schema.required.filter((item): item is string => typeof item === "string") : [];
+    for (const name of required) if (!(name in body)) throw new TtaSdkError(`V těle požadavku chybí povinné pole ${label}.${name}.`);
+    const properties = asRecord(schema.properties) ?? {};
+    for (const [name, child] of Object.entries(properties)) {
+      if (name in body) validateBodySchema(body[name], child, document, `${label}.${name}`, depth + 1);
+    }
+  } else if (type === "array" && Array.isArray(value) && schema.items) {
+    value.forEach((item, index) => validateBodySchema(item, schema.items, document, `${label}[${index}]`, depth + 1));
+  }
+}
+
+function swaggerRequestUrl(row: ConnectionRow, document: SwaggerDocument, operation: SwaggerOperation, pathParameters: Record<string, string>): URL {
+  let routePath = operation.path.replace(/\{([^}]+)\}/g, (_match, name: string) => {
+    const value = pathParameters[name];
+    if (value === undefined) throw new TtaSdkError(`Chybí path parametr ${name}.`);
+    return encodeURIComponent(value);
+  });
+  if (/[{}]/.test(routePath) || routePath.includes("\\") || routePath.includes("?") || routePath.includes("#") || routePath.split("/").some((segment) => segment === "..")) {
+    throw new TtaSdkError("Cesta TTA operace obsahuje nevyplněný nebo nepovolený segment.");
+  }
+  const specBasePath = typeof document.basePath === "string" ? document.basePath : "";
+  let candidate = `${specBasePath.replace(/\/+$/, "")}/${routePath.replace(/^\/+/, "")}`.replace(/\/{2,}/g, "/");
+  if (!candidate.startsWith("/")) candidate = `/${candidate}`;
+  let decodedCandidate = candidate;
+  try { decodedCandidate = decodeURIComponent(candidate); } catch { throw new TtaSdkError("Cesta TTA operace obsahuje neplatné URL kódování."); }
+  if (decodedCandidate.split("/").some((segment) => segment === "..")) throw new TtaSdkError("Cesta TTA operace obsahuje nepovolený segment '..'.");
+  const baseUrl = new URL(row.base_url);
+  const connectionPath = baseUrl.pathname.replace(/\/+$/, "");
+  const apiPath = normalizeApiPath(row.sdk_path).replace(/\/+$/, "");
+  let finalPath: string;
+  if (candidate === apiPath || candidate.startsWith(`${apiPath}/`) || candidate.includes(`${apiPath}/`)) {
+    finalPath = connectionPath && !candidate.startsWith(connectionPath) ? `${connectionPath}${candidate}` : candidate;
+  } else if (connectionPath && (candidate === connectionPath || candidate.startsWith(`${connectionPath}/`))) {
+    const tail = candidate.slice(connectionPath.length);
+    finalPath = `${connectionPath}${apiPath}${tail}`.replace(/\/{2,}/g, "/");
+  } else if (specBasePath) {
+    const combined = `${specBasePath.replace(/\/+$/, "")}${apiPath}/${routePath.replace(/^\/+/, "")}`.replace(/\/{2,}/g, "/");
+    finalPath = connectionPath && !combined.startsWith(connectionPath) ? `${connectionPath}${combined}` : combined;
+  } else {
+    finalPath = `${connectionPath}${apiPath}${candidate}`.replace(/\/{2,}/g, "/");
+  }
+  baseUrl.pathname = finalPath;
+  baseUrl.search = "";
+  baseUrl.hash = "";
+  for (const [name, value] of Object.entries(pathParameters)) {
+    if (operation.parameters.some((parameter) => parameter.in === "path" && parameter.name === name) && !operation.path.includes(`{${name}}`)) {
+      throw new TtaSdkError(`Path parametr ${name} není v cestě operace.`);
+    }
+    void value;
+  }
+  return baseUrl;
+}
+
+function swaggerRequestBody(operation: SwaggerOperation, document: SwaggerDocument, body: unknown, formData: Record<string, unknown>) {
+  const formParameters = operation.parameters.filter((parameter) => parameter.in === "formData");
+  if (formParameters.length) {
+    if (body !== undefined) throw new TtaSdkError("TTA Swagger očekává formData, nikoli JSON body.");
+    const allowed = new Set(formParameters.map((parameter) => parameter.name));
+    for (const name of Object.keys(formData)) if (!allowed.has(name)) throw new TtaSdkError(`Parametr ${name} není v TTA Swaggeru deklarován jako formData.`);
+    const supplied: Record<string, string> = {};
+    for (const parameter of formParameters) {
+      const value = formData[parameter.name];
+      if ((value === undefined || value === null) && parameter.required) throw new TtaSdkError(`Chybí povinný formData parametr ${parameter.name}.`);
+      if (value === undefined || value === null || parameter.type === "file") continue;
+      const formatted = parameterValue(value, parameter);
+      if (/[\r\n]/.test(formatted)) throw new TtaSdkError(`Parametr ${parameter.name} obsahuje nepovolený nový řádek.`);
+      if (Array.isArray(parameter.enum) && !parameter.enum.some((item) => String(item) === formatted)) throw new TtaSdkError(`Parametr ${parameter.name} nemá povolenou hodnotu podle TTA Swaggeru.`);
+      supplied[parameter.name] = formatted;
+    }
+    const declaredTypes = operation.consumes ?? document.consumes ?? [];
+    const fileParameters = formParameters.filter((parameter) => parameter.type === "file");
+    if (fileParameters.length) {
+      if (!declaredTypes.includes("multipart/form-data")) throw new TtaSdkError("TTA Swagger deklaruje upload souboru mimo multipart/form-data.", null, "SDK_UNAVAILABLE");
+      const boundary = `----tta-mcp-${randomUUID().replace(/-/g, "")}`;
+      const parts: Buffer[] = [];
+      for (const parameter of formParameters) {
+        const value = formData[parameter.name];
+        if (value === undefined || value === null) continue;
+        const file = parameter.type === "file" ? asRecord(value) : null;
+        let content: Buffer;
+        let fileName = "";
+        let contentType = "text/plain; charset=utf-8";
+        if (parameter.type === "file") {
+          if (typeof file?.dataBase64 !== "string" || typeof file.fileName !== "string") throw new TtaSdkError(`Soubor ${parameter.name} vyžaduje objekt fileName/dataBase64.`);
+          if (/[\r\n]/.test(file.fileName)) throw new TtaSdkError(`Název souboru ${parameter.name} obsahuje nepovolené znaky.`);
+          content = Buffer.from(file.dataBase64, "base64");
+          if (!content.length || content.length > MAX_RESPONSE_BYTES || content.toString("base64").replace(/=+$/, "") !== file.dataBase64.replace(/=+$/, "")) throw new TtaSdkError(`Soubor ${parameter.name} má neplatná base64 data nebo překračuje limit 2 MB.`);
+          fileName = file.fileName.replace(/[\r\n"\\]/g, "_").slice(0, 180);
+          contentType = typeof file.contentType === "string" && /^[\w.+-]+\/[\w.+-]+$/.test(file.contentType) ? file.contentType : "application/octet-stream";
+        } else {
+          content = Buffer.from(supplied[parameter.name] ?? "", "utf8");
+        }
+        parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${parameter.name.replace(/[\r\n"\\]/g, "_")}"${fileName ? `; filename="${fileName}"` : ""}\r\nContent-Type: ${contentType}\r\n\r\n`, "utf8"), content, Buffer.from("\r\n", "utf8"));
+      }
+      parts.push(Buffer.from(`--${boundary}--\r\n`, "utf8"));
+      const output = Buffer.concat(parts);
+      if (output.length > MAX_RESPONSE_BYTES) throw new TtaSdkError("Upload překračuje limit 2 MB.");
+      return { body: output, contentType: `multipart/form-data; boundary=${boundary}` };
+    }
+    if (!declaredTypes.includes("application/x-www-form-urlencoded")) throw new TtaSdkError("TTA operace vyžaduje nepodporovaný formData content type.", null, "SDK_UNAVAILABLE");
+    return { body: new URLSearchParams(supplied).toString(), contentType: "application/x-www-form-urlencoded; charset=utf-8" };
+  }
+  if (Object.keys(formData).length) throw new TtaSdkError("TTA Swagger pro tuto operaci formData parametry nedeklaruje.");
+  const bodyParameter = operation.parameters.find((parameter) => parameter.in === "body");
+  const requestBody = asRecord(operation.raw.requestBody);
+  const requestBodyContent = asRecord(requestBody?.content) ?? {};
+  const jsonRequestBody = requestBodyContent["application/json"] ?? Object.entries(requestBodyContent).find(([type]) => type.includes("json"))?.[1];
+  const openApiSchema = asRecord(jsonRequestBody)?.schema;
+  if ((bodyParameter?.required || requestBody?.required === true) && body === undefined) throw new TtaSdkError("Chybí povinné JSON body požadavku.");
+  if (!bodyParameter && !requestBody && body !== undefined) throw new TtaSdkError("TTA Swagger pro tuto operaci JSON body nedeklaruje.");
+  if (body !== undefined) validateBodySchema(body, bodyParameter?.schema ?? openApiSchema, document);
+  if (body === undefined) return { body: undefined, contentType: undefined };
+  const declaredTypes = operation.consumes ?? document.consumes ?? Object.keys(requestBodyContent);
+  if (declaredTypes.length && !declaredTypes.some((type) => type.includes("json"))) throw new TtaSdkError("TTA Swagger pro tuto operaci nedeklaruje JSON body.", null, "SDK_UNAVAILABLE");
+  const serialized = JSON.stringify(body);
+  if (Buffer.byteLength(serialized) > MAX_RESPONSE_BYTES) throw new TtaSdkError("Tělo požadavku překračuje limit 2 MB.");
+  return { body, contentType: "application/json; charset=utf-8" };
+}
+
+export async function callTtaSwaggerOperation(vault: Vault, row: ConnectionRow, operationId: string,
+  input: { pathParameters?: Record<string, unknown>; queryParameters?: Record<string, unknown>; headerParameters?: Record<string, unknown>; body?: unknown; formData?: Record<string, unknown> },
+  mode: "READ" | "WRITE"): Promise<{ method: RestMethod; data: unknown }> {
+  return withTtaSession(vault, row, async (sessionId) => {
+    const operations = await getTtaSwaggerOperations(row, sessionId);
+    const document = swaggerCache.get(row.id)?.document;
+    if (!document) throw new TtaSdkError("TTA Swagger se nepodařilo načíst.", null, "SDK_UNAVAILABLE");
+    const operation = swaggerOperation(operations, operationId);
+    if (mode === "READ" && operation.method !== "GET") throw new TtaSdkError("Tato operace není GET. Použijte tta_api_write a potvrďte operationId.");
+    if (mode === "WRITE" && operation.method === "GET") throw new TtaSdkError("GET operace se volají nástrojem tta_api_read.");
+    const pathParameters = validateInputParameters(operation.parameters, input.pathParameters ?? {}, "path");
+    const queryParameters = validateInputParameters(operation.parameters, input.queryParameters ?? {}, "query");
+    const headerParameters = validateInputParameters(operation.parameters, input.headerParameters ?? {}, "header");
+    for (const name of Object.keys(headerParameters)) {
+      const lowerName = name.toLowerCase();
+      if (["authorization", "host", "content-length", "connection", "cookie", "transfer-encoding", "origin", "referer", "proxy-authorization", "proxy-connection", "expect", "upgrade"].includes(lowerName)
+        || lowerName.startsWith("x-forwarded-") || lowerName.startsWith("sec-")) {
+        throw new TtaSdkError(`Hlavičku ${name} nelze přepsat přes MCP.`);
+      }
+    }
+    const query: Record<string, QueryValue> = { ...queryParameters };
+    const pathParametersDeclared = operation.parameters.filter((parameter) => parameter.in === "path");
+    for (const parameter of pathParametersDeclared) if (parameter.required && pathParameters[parameter.name] === undefined) throw new TtaSdkError(`Chybí povinný path parametr ${parameter.name}.`);
+    const extraPathNames = Object.keys(input.pathParameters ?? {}).filter((name) => !pathParametersDeclared.some((parameter) => parameter.name === name));
+    if (extraPathNames.length) throw new TtaSdkError(`Path parametr ${extraPathNames[0]} není v TTA Swaggeru deklarován.`);
+    const url = swaggerRequestUrl(row, document, operation, pathParameters);
+    for (const [name, value] of Object.entries(query)) url.searchParams.set(name, value === undefined ? "" : String(value));
+    const body = swaggerRequestBody(operation, document, input.body, input.formData ?? {});
+    const accepts = operation.produces?.join(", ") || document.produces?.join(", ") || "application/json";
+    const result = await restRequest<unknown>(row, operation.method, "", {
+      requestUrl: url,
+      query: {},
+      ...(body.body !== undefined ? { body: body.body, contentType: body.contentType } : {}),
+      headers: { accept: accepts, ...headerParameters },
+      authorization: sessionId,
+      requestLabel: `${operation.method} ${operation.path} (${operation.operationId})`,
+      allowBinaryResponse: true,
+    });
+    return { method: operation.method, data: result };
+  });
+}
+
 async function validateTtaSession(row: ConnectionRow, sessionId: string): Promise<boolean> {
-  const validation = await restRequest(row, "POST", `users/sessions/${encodeURIComponent(sessionId)}/validate`);
+  const validation = await restRequest(row, "POST", `users/sessions/${encodeURIComponent(sessionId)}/validate`, {
+    requestLabel: "validaci relace (POST /users/sessions/{sessionId}/validate)",
+  });
   return getField(validation, "IsValid", "isValid") === true;
 }
 
@@ -388,11 +794,13 @@ async function acquireTtaSession(vault: Vault, row: ConnectionRow): Promise<stri
         authorization: credentials.systemSessionId,
         body: { UserId: credentials.username },
         authentication: true,
+        requestLabel: "přihlášení SYSTEM_SESSION_ID (POST /users/sessions/single-sign-on)",
       });
     } else {
       session = await restRequest(row, "POST", "users/sessions", {
         body: { UserName: credentials.username, Password: credentials.secret, UnconditionalLogOn: false },
         authentication: true,
+        requestLabel: "interní přihlášení (POST /users/sessions)",
       });
     }
     const sessionId = getField(session, "SessionId", "sessionId");
@@ -460,7 +868,7 @@ export async function callTtaApi<T = unknown>(vault: Vault, row: ConnectionRow, 
           }, authorization,
         });
       default:
-        throw new TtaSdkError("Tato operace není povolena v read-only katalogu.");
+        throw new TtaSdkError("Operace není v pojmenovaném TTA katalogu.");
     }
   });
 }

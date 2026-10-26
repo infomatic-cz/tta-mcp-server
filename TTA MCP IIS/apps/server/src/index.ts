@@ -68,7 +68,7 @@ if (process.argv.includes("--stdio")) {
       .header("content-security-policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
   });
 
-  app.get("/health/live", async () => ({ status: "ok", version: "0.3.4" }));
+  app.get("/health/live", async () => ({ status: "ok", version: "0.3.5" }));
   app.get("/health/ready", async (_request, reply) => {
     try {
       store.db.prepare("SELECT 1").get();
@@ -262,6 +262,9 @@ if (process.argv.includes("--stdio")) {
   app.get("/api/tools", async () => [
     { name: "tta_connections_list", description: "Seznam povolených připojení bez tajných údajů.", risk: "READ", availability: "AVAILABLE" },
     { name: "tta_connection_test", description: "Ověření přihlášení a REST API relace.", risk: "READ", availability: "AVAILABLE" },
+    { name: "tta_api_operations", description: "Objeví operace a parametry přímo z REST Swaggeru TTA.", risk: "READ", availability: "AVAILABLE_AFTER_TTA_AUTH" },
+    { name: "tta_api_read", description: "Volá GET operace deklarované REST Swaggerem TTA.", risk: "READ", availability: "AVAILABLE_AFTER_TTA_AUTH" },
+    { name: "tta_api_write", description: "Volá POST/PUT/PATCH/DELETE operace deklarované REST Swaggerem; vyžaduje potvrzení operationId.", risk: "WRITE / DESTRUCTIVE", availability: "AVAILABLE_AFTER_TTA_AUTH" },
     ...[
       ["tta_jobs_list", "Seznam jobů podle TTA query", "job.read"],
       ["tta_jobs_count", "Počet jobů podle TTA query", "job.read"],

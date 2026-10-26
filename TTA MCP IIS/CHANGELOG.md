@@ -2,6 +2,18 @@
 
 Změny jsou řazeny od nejnovější verze. Projekt používá Semantic Versioning.
 
+## [0.3.5] – 2026-10-26
+
+### Přidáno
+- MCP `tta_api_operations` dynamicky načítá operace z REST Swaggeru konkrétního TTA připojení; `tta_api_read` zpřístupňuje GET a `tta_api_write` POST/PUT/PATCH/DELETE operace.
+- Dynamické volání validuje operationId, path/query/header parametry a JSON/formData podle Swaggeru, omezuje velikost na 2 MB a podporuje malé binární uploady/downloady v base64.
+- Zápisové volání má `destructiveHint` a vyžaduje zopakování operationId v potvrzovacím parametru; každé volání se audituje.
+
+### Opraveno
+- Volba důvěry certifikátu nyní nepoužívá opakovaně upstream TLS socket, což předchází resetům po zavřeném keep-alive spojení IIS/proxy.
+- Diagnostika `ECONNRESET` uvádí fázi přihlášení, SSO nebo validace relace a vysvětluje, že důvěra certifikátu neodstraňuje reset síťového spojení.
+- MCP katalog a dokumentace už neoznačují celý TTA konektor jako pouze read-only; popisují skutečný dynamický rozsah Swaggeru a jeho limity.
+
 ## [0.3.4] – 2026-10-26
 
 ### Změněno
