@@ -1,6 +1,6 @@
 # Instalace TTA MCP IIS na Windows Server
 
-Tato varianta hostuje webovou aplikaci přímo jako IIS aplikaci. HTTPS vazbu a port 443 obsluhuje IIS. HttpPlatformHandler spouští Node.js proces a předává mu interní dynamický port; není potřeba Nginx, ARR ani samostatný veřejný port MCP serveru. Microsoft dokumentuje HttpPlatformHandler jako IIS modul pro správu HTTP procesů včetně Node.js: [HttpPlatformHandler – konfigurace](https://learn.microsoft.com/en-us/iis/extensions/httpplatformhandler/httpplatformhandler-configuration-reference).
+Tato varianta hostuje webovou aplikaci přímo jako IIS aplikaci. HTTPS vazbu a port 443 obsluhuje IIS. HttpPlatformHandler spouští Node.js proces a předává mu dynamický interní port `%HTTP_PLATFORM_PORT%`; není potřeba Nginx, ARR ani samostatný veřejný port MCP serveru. Microsoft dokumentuje HttpPlatformHandler jako IIS modul pro správu HTTP procesů včetně Node.js: [HttpPlatformHandler – konfigurace](https://learn.microsoft.com/en-us/iis/extensions/httpplatformhandler/httpplatformhandler-configuration-reference).
 
 ## 1. Vytvoření balíčku na pracovní stanici
 
@@ -16,17 +16,18 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 Hotový ZIP vznikne mimo OneDrive:
 
 ```text
-C:\Temp\TTAMCP-Build\IIS\tta-mcp-server-iis-0.3.1-windows-x64.zip
+C:\Temp\TTAMCP-Build\IIS\tta-mcp-server-iis-0.3.2-windows-x64.zip
 ```
 
-ZIP obsahuje zkompilovaný server, webové rozhraní, produkční Node závislosti, IIS šablonu a deploy skript. Build se na cílovém serveru nedělá.
+ZIP obsahuje zkompilovaný server, webové rozhraní, produkční Node závislosti, IIS šablonu a instalační skript. Build se na cílovém serveru nedělá.
 
 ## 2. Co musí být na cílovém serveru
 
 Na Windows Serveru připravte:
 
 - IIS 10 s HTTPS site bindingem na portu 443. Binding musí používat certifikát platný pro doménu, přes kterou se bude MCP otevírat.
-- IIS Management Scripts and Tools, aby PowerShell mohl spravovat weby a aplikační pooly.
+- 64bitový PowerShell 7.0+ spuštěný jako správce.
+- IIS Management Scripts and Tools, které poskytují vestavěné `AppCmd.exe` a `Microsoft.Web.Administration.dll`; modul WebAdministration není potřeba.
 - **HttpPlatformHandler x64**. Nainstalujte MSI z [oficiální stránky IIS](https://learn.iis.net/downloads/microsoft/httpplatformhandler). Po instalaci ověřte modul v IIS Manageru nebo příkazem:
 
   ```powershell
@@ -44,8 +45,8 @@ Na server se nekopírují zdroje, Git, Python ani Visual Studio Build Tools. Nen
 Přeneste ZIP například do `C:\Transfer` a rozbalte jej do nové dočasné složky:
 
 ```powershell
-$zip = 'C:\Transfer\tta-mcp-server-iis-0.3.1-windows-x64.zip'
-$package = 'C:\Transfer\tta-mcp-iis-0.3.1'
+$zip = 'C:\Transfer\tta-mcp-server-iis-0.3.2-windows-x64.zip'
+$package = 'C:\Transfer\tta-mcp-iis-0.3.2'
 New-Item -ItemType Directory -Path $package -Force | Out-Null
 Expand-Archive -LiteralPath $zip -DestinationPath $package
 Get-Content (Join-Path $package 'runtime.json')
@@ -53,26 +54,26 @@ node --version
 node -p "process.arch"
 ```
 
-Otevřete **PowerShell jako správce**, přejděte do rozbaleného balíčku a spusťte deploy. Hodnoty `SiteName` a `PublicOrigin` upravte podle IIS Manageru. `ApplicationPath` je nová IIS aplikace pod existujícím webem:
+Otevřete **64bitový PowerShell 7 jako správce**, přejděte do rozbaleného balíčku a spusťte instalační skript. `SiteName` musí odpovídat názvu existujícího IIS webu. `ApplicationPath` je nová aplikace pod tímto webem:
 
 ```powershell
-Set-Location 'C:\Transfer\tta-mcp-iis-0.3.1'
+Set-Location 'C:\Transfer\tta-mcp-iis-0.3.2'
 Set-ExecutionPolicy -Scope Process Bypass -Force
-.\Deploy-IIS.ps1 `
+.\Install-TTA-MCP.ps1 `
   -SiteName 'Default Web Site' `
-  -ApplicationPath '/tta-mcp' `
-  -PublicOrigin 'https://winserver-tta26.im.cz'
+  -ApplicationPath 'tta-mcp' `
+  -InstallRoot 'C:\Apps\TTA MCP IIS'
 ```
 
-`PublicOrigin` musí přesně odpovídat HTTPS doméně IIS bindingu a certifikátu, bez cesty aplikace. Pokud například uživatelé otevírají TTA na `https://winserver-tta26.im.cz`, ponechte tuto adresu. IIS aplikace pak bude dostupná na:
+Skript odvodí hostname z existující HTTPS vazby. Pokud je na webu více hostname nebo vazba bez hostname, zeptá se na jméno serveru; pro neinteraktivní instalaci použijte `-ServerHost`. Skript nevytváří ani nemění IIS web, HTTPS binding, certifikát nebo port. Aplikace pak bude dostupná na:
 
 ```text
 https://winserver-tta26.im.cz/tta-mcp/
 ```
 
-Deploy skript vytvoří aplikační pool `TtaMcpIIS` s identitou ApplicationPoolIdentity, nastaví IIS aplikaci, její URL prefix, přístupová práva a `web.config`. Node.js proces spouští a spravuje IIS HttpPlatformHandler. Proces naslouchá pouze na interním dynamickém portu; ve Windows Firewallu se nemusí otevírat port 8380 ani 8543.
+Instalační skript vytvoří aplikační pool `TtaMcpIIS`, nastaví URL prefix, přístupová práva a `web.config`. Výchozí identita nového poolu je ApplicationPoolIdentity; při aktualizaci se existující identita zachová. Volitelně lze použít `-ServiceAccount 'DOMENA\svc_tta_mcp'`; heslo se zadá skrytým vstupem a IIS je uloží v chráněné konfiguraci. `-UseApplicationPoolIdentity` výslovně nastaví výchozí identitu. HttpPlatformHandler předá Node.js dynamický port přes `%HTTP_PLATFORM_PORT%`; port 8380 ani 8543 se ve firewallu neotevírá.
 
-Při prvním nasazení skript vytvoří náhodný vault klíč, uloží jej zašifrovaný Windows DPAPI pro tento počítač a vypíše jednorázový instalační kód. Kód zadejte do webového rozhraní a založte účet správce s heslem alespoň 12 znaků. Kód platí 30 minut a po vytvoření účtu zanikne. Později se přihlašujte svým správcovským účtem. IIS pool používá identitu **ApplicationPoolIdentity** a 64bitový proces; skript jí udělí pouze potřebný přístup k datům, logům a vydané aplikaci.
+Při prvním nasazení skript vytvoří náhodný vault klíč, uloží jej zašifrovaný Windows DPAPI pro tento počítač a po úspěšné HTTPS readiness kontrole vypíše jednorázový instalační kód. Kód zadejte do webového rozhraní a založte účet správce s heslem alespoň 12 znaků. Kód platí 30 minut a po vytvoření účtu zanikne. Později se přihlašujte svým správcovským účtem. Proces je 64bitový a skript udělí potřebná přístupová práva vybrané identitě aplikačního poolu.
 
 Pokud skript vypíše, že health kontrola ještě neodpovídá, ověřte stav na `https://winserver-tta26.im.cz/tta-mcp/health/ready` a prohlédněte IIS/HttpPlatformHandler logy v:
 
@@ -114,7 +115,7 @@ Zálohujte databázi a DPAPI soubor společně a chraňte zálohu. DPAPI LocalMa
 
 ## 7. Aktualizace a návrat
 
-Rozbalte novou verzi do nové dočasné složky a spusťte její `Deploy-IIS.ps1` se stejnými parametry. Skript zkopíruje release do nové složky pod `C:\Apps\TTA MCP IIS\releases\<verze>` a přesměruje IIS aplikaci na novou verzi. Databáze a DPAPI klíč pod `%ProgramData%` zůstanou zachované; starší release se nemaže.
+Rozbalte novou verzi do nové dočasné složky a spusťte její `Install-TTA-MCP.ps1` se stejnými parametry. Skript zkopíruje release do nové složky pod `C:\Apps\TTA MCP IIS\releases\<verze>` a přesměruje IIS aplikaci na novou verzi. Databáze a DPAPI klíč pod `%ProgramData%` zůstanou zachované; starší release se nemaže. Pokud po prvním nasazení selže pouze readiness kontrola, opravte příčinu a spusťte instalátor znovu se stejným balíčkem: shodný existující release znovu použije a nepřepíše jeho soubory.
 
 Před aktualizací poznamenejte cestu `Physical Path` aplikace v IIS Manageru. Při návratu nastavte její `Physical Path` na předchozí složku `releases\<verze>` a recyklujte `TtaMcpIIS` app pool.
 
@@ -122,6 +123,6 @@ Před aktualizací poznamenejte cestu `Physical Path` aplikace v IIS Manageru. P
 
 - **HTTP 500.21 / modul není rozpoznán:** HttpPlatformHandler x64 není nainstalovaný nebo nebyl po instalaci restartován IIS.
 - **HTTP 502.3 / backend nedostupný:** zkontrolujte Node.js, Visual C++ Redistributable a soubory v `%ProgramData%\TTA MCP IIS\logs`.
-- **HTTP 403 Nepovolený Host:** `PublicOrigin` musí odpovídat hostu v prohlížeči a HTTPS bindingu.
+- **HTTP 403 Nepovolený Host:** hostname musí odpovídat vybrané HTTPS vazbě IIS.
 - **Nelze načíst vault key:** ověřte, že IIS app pool má přístup k `vault-key.dpapi` a že deploy skript spouštíte pod správcovským účtem.
 - **TTA REST API není dosažitelné:** ověřte odchozí DNS/síť, TLS certifikát a důvěru kořenové CA v `Local Computer`.

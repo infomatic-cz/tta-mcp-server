@@ -90,7 +90,7 @@ try {
 }
 
 New-Item -ItemType Directory -Path $release -Force | Out-Null
-foreach ($item in @('package.json', 'package-lock.json', 'README.md', 'CHANGELOG.md', 'Run-Local.ps1', 'Deploy-IIS.ps1')) {
+foreach ($item in @('package.json', 'package-lock.json', 'README.md', 'CHANGELOG.md', 'Run-Local.ps1', 'Install-TTA-MCP.ps1')) {
     Copy-Item -LiteralPath (Join-Path $workspace $item) -Destination $release -Force
 }
 foreach ($directory in @('dist', 'docs', 'deploy')) {

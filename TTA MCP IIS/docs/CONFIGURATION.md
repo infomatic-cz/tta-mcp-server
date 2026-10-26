@@ -18,6 +18,6 @@
 
 Vault klíč musí být base64 kódování přesně 32 náhodných bajtů. Klíč se při startu načte do paměti; procesní kopie proměnné `TTA_VAULT_KEY` se ihned odstraní. Restart se stejným klíčem je nutný k dešifrování existujících TTA credentials.
 
-IIS HttpPlatformHandler spustí Node.js s dynamickým portem `HTTP_PLATFORM_PORT`; `TTA_PORT` má před ním přednost. Veřejná HTTPS komunikace končí v IIS. Pro IIS virtuální aplikaci nastavte například `TTA_BASE_PATH=/tta-mcp`; veřejný MCP endpoint pak bude `https://tta-mcp.example.cz/tta-mcp/tta-mcp`.
+IIS šablona výslovně předává Node.js hodnotu `%HTTP_PLATFORM_PORT%`, kterou HttpPlatformHandler dynamicky přidělí; `TTA_PORT` má před ní přednost. Veřejná HTTPS komunikace končí v IIS. Pro IIS virtuální aplikaci nastaví instalátor `TTA_BASE_PATH` podle její cesty, například `/tta-mcp`; veřejný MCP endpoint pak bude `https://tta-mcp.example.cz/tta-mcp/tta-mcp`.
 
 TTA základní URL, cestu REST API (výchozí `/services/sdk/v1`) a způsob autentizace (`PASSWORD` nebo `SYSTEM_SESSION_ID`) nastavte pro každé připojení v admin konzoli. Pokud Swagger ukazuje `basePath: /TotalAgility`, zahrňte tento kontext do základní URL a ponechte cestu REST API `/services/sdk/v1`. `SYSTEM_SESSION_ID` je šifrované tajemství, které se nikdy nevrací do API; při SSO se předává pouze v autorizační hlavičce TTA.

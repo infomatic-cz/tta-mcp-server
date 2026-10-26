@@ -1,6 +1,6 @@
 # Architektura
 
-Verze 0.3.1 zachovává REST klienta představeného v 0.2.1 a volá TTA API podle [Swaggeru konkrétní TTA instance](https://winserver-tta26.im.cz/TotalAgility/swagger/docs/v1). IIS nasazení provozuje stejnou Node.js aplikaci přes HttpPlatformHandler jako aplikaci pod existujícím HTTPS webem.
+Verze ..3.1 zachovává REST klienta představeného v ..2.1 a volá TTA API podle [Swaggeru konkrétní TTA instance](https://winserver-tta26.im.cz/TotalAgility/swagger/docs/v1). IIS nasazení provozuje stejnou Node.js aplikaci přes HttpPlatformHandler jako aplikaci pod existujícím HTTPS webem.
 
 ```text
 MCP Streamable HTTP / stdio

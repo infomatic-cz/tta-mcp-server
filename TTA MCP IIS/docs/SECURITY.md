@@ -14,7 +14,7 @@ Pro samotnou kryptografickou operaci je nutné tajemství načíst do paměti pr
 
 ## Ochrana HTTP
 
-- Výchozí bind je `127.0.0.1`; IIS HttpPlatformHandler naslouchá jen na interním dynamickém portu a obsluhuje veřejnou HTTPS vazbu IIS.
+- Výchozí bind je `127.....1`; IIS HttpPlatformHandler naslouchá jen na interním dynamickém portu a obsluhuje veřejnou HTTPS vazbu IIS.
 - Host allowlist, Origin allowlist pro browser požadavky, SameSite cookies, rate limit login/setup a omezená velikost JSON body.
 - Bez CORS wildcardu. `trustProxy` je vypnutý; `X-Forwarded-For` se nepoužívá pro autentizaci ani kontrolu bootstrap kódu.
 - TTA URL přijímá pouze HTTPS, pokud operátor nepovolí HTTP. REST redirecty se odmítají; URL credentials/query nejsou povolené. Swagger UI odkaz lze vložit a normalizuje se na základní URL.
@@ -40,6 +40,6 @@ Audit obsahuje aktéra, typ akce, ID cíle, výsledek a čas. Nepřidává vstup
 - Databázi a DPAPI soubor zálohujte společně; obnovu DPAPI LocalMachine plánujte pro stejný Windows server.
 - Pravidelná kontrola auditních záznamů a rotace MCP tokenů.
 
-## Omezení 0.3.1
+## Omezení ..3.1
 
 Vzdálené OAuth, víceuživatelské role, CSRF synchronizační token, rate limit s distribuovaným úložištěm, rotace klíčů, TTA write operace, dokumentové API a další version-specific adaptéry nejsou implementované. TTA endpoint, credentials a oprávnění musí být ověřeny proti cílovému tenantovi. IIS varianta potřebuje samostatné provozní ověření v cílovém prostředí před produkčním nasazením.

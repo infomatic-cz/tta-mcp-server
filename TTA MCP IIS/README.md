@@ -2,23 +2,23 @@
 
 Samostatný MCP server pro správu připojení Tungsten TotalAgility a přístupů MCP klientů. Aplikace nabízí React administrační rozhraní, Fastify API, MCP přes Streamable HTTP a `stdio`, audit a SQLite úložiště.
 
-**Verze 0.3.1.** IIS varianta zachovává stejné TTA a MCP funkce a přidává hostování jako IIS aplikace. Konektor používá REST API `/services/sdk/v1`, jeho odpověď validace `IsValid` a autorizační hlavičku TTA session ID. Podporuje interní jméno/heslo, alternativní `SYSTEM_SESSION_ID`, read-only nástroje pro joby a aktivity. Zápisové operace, dokumenty, uživatelé, Designer, PostgreSQL, Docker a plné RBAC zůstávají mimo tento release; viz [aktuální rozsah](docs/TTA_CAPABILITIES.md).
+**Verze 0.3.2.** IIS varianta zachovává stejné TTA a MCP funkce a přidává hostování jako IIS aplikace. Konektor používá REST API `/services/sdk/v1`, jeho odpověď validace `IsValid` a autorizační hlavičku TTA session ID. Podporuje interní jméno/heslo, alternativní `SYSTEM_SESSION_ID`, read-only nástroje pro joby a aktivity. Zápisové operace, dokumenty, uživatelé, Designer, PostgreSQL, Docker a plné RBAC zůstávají mimo tento release; viz [aktuální rozsah](docs/TTA_CAPABILITIES.md).
 
 ## Nasazení na IIS
 
-IIS obsluhuje HTTPS na existujícím portu 443. Modul HttpPlatformHandler spouští a spravuje Node.js proces aplikace; Nginx, IIS ARR ani samostatný veřejný port aplikace nejsou potřeba. Připojení k TTA stále vyžaduje funkční DNS/síť a důvěryhodný TLS certifikát ve Windows.
+IIS obsluhuje HTTPS na existujícím portu 443. HttpPlatformHandler spouští Node.js proces a předává mu dynamický interní port `%HTTP_PLATFORM_PORT%`; Nginx, IIS ARR ani samostatný veřejný port aplikace nejsou potřeba. Připojení k TTA stále vyžaduje funkční DNS/síť a důvěryhodný TLS certifikát ve Windows.
 
-Na pracovní stanici vytvořte balíček příkazem `New-Build.ps1`; ZIP vznikne v `C:\Temp\TTAMCP-Build\IIS`. Na serveru ho rozbalte a postupujte podle [instalačního návodu pro IIS](docs/INSTALLATION_IIS.md). Příklad nasazení do aplikace `/tta-mcp` existujícího webu:
+Na pracovní stanici vytvořte balíček příkazem `New-Build.ps1`; ZIP vznikne v `C:\Temp\TTAMCP-Build\IIS`. Na serveru jej rozbalte a postupujte podle [instalačního návodu pro IIS](docs/INSTALLATION_IIS.md). Příklad nasazení do aplikace `/tta-mcp` existujícího webu:
 
 ```powershell
-.\Deploy-IIS.ps1 -SiteName 'Default Web Site' -ApplicationPath '/tta-mcp' -PublicOrigin 'https://tta-mcp.example.cz'
+.\Install-TTA-MCP.ps1 -SiteName 'Default Web Site' -ApplicationPath 'tta-mcp' -InstallRoot 'C:\Apps\TTA MCP IIS'
 ```
 
-Přístup bude `https://tta-mcp.example.cz/tta-mcp/`; administrační konzole zobrazí přesnou MCP adresu.
+Přístup bude `https://tta-mcp.example.cz/tta-mcp/`; instalační skript odvodí hostname z existující HTTPS vazby IIS. Při více hostnames lze použít `-ServerHost`.
 
 ## Rychlý start ve Windows
 
-Na vývojové stanici vytvořte hotový Windows balíček příkazem `New-Build.ps1`; soubor `tta-mcp-server-iis-<verze>-windows-x64.zip` vznikne v `C:\Temp\TTAMCP-Build\IIS`. Na cílovém Windows Serveru stačí stejná hlavní verze Node.js a Visual C++ Redistributable x64. Git, Python, Visual Studio Build Tools ani npm instalace tam nejsou potřeba.
+Na vývojové stanici vytvořte hotový Windows balíček příkazem `New-Build.ps1`; soubor `tta-mcp-server-iis-<verze>-windows-x64.zip` vznikne v `C:\Temp\TTAMCP-Build\IIS`. Na cílovém Windows Serveru jsou potřeba 64bitový PowerShell 7, IIS Management Tools, HttpPlatformHandler x64, stejná hlavní verze Node.js a Visual C++ Redistributable x64. Git, Python, Visual Studio Build Tools ani npm instalace tam nejsou potřeba.
 
 Následující příkazy spouštějí zdrojový projekt na vývojovém počítači. Na cílovém Windows Serveru připojte rozbalený ZIP jako IIS aplikaci podle instalační příručky.
 
@@ -73,7 +73,7 @@ Pro `stdio` se nepoužívá vzdálený API token; oprávnění odpovídá lokál
 - Administrační cookie je HttpOnly, SameSite=Strict a na vzdálené instalaci Secure. Mutující administrační API kontroluje Origin.
 - Výchozí síťový bind je loopback; TTA adresa vyžaduje HTTPS, pokud administrátor výslovně nepovolí HTTP.
 - MCP token lze omezit na vybraná prostředí, expirovat a okamžitě revokovat.
-- TTA operace v 0.3.1 jsou pouze read-only a volají konkrétní REST endpointy z allowlistu. Test spojení ověřuje REST login a `IsValid`; neprokazuje automaticky oprávnění pro každé TTA query.
+- TTA operace v 0.3.2 jsou pouze read-only a volají konkrétní REST endpointy z allowlistu. Test spojení ověřuje REST login a `IsValid`; neprokazuje automaticky oprávnění pro každé TTA query.
 - `SYSTEM_SESSION_ID` a TTA heslo se šifrují stejným vault klíčem. Zálohujte databázi a chráněný vault klíč společně.
 
 Podrobnosti: [Architektura](docs/ARCHITECTURE.md), [Konfigurace](docs/CONFIGURATION.md), [Bezpečnost](docs/SECURITY.md), [IIS](docs/INSTALLATION_IIS.md), [kompatibilita TTA](docs/TTA_API_COMPATIBILITY.md).

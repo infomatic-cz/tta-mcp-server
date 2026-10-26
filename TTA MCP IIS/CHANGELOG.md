@@ -2,6 +2,16 @@
 
 Změny jsou řazeny od nejnovější verze. Projekt používá Semantic Versioning.
 
+## [0.3.2] – 2026-10-26
+
+### Opraveno
+- Nový `Install-TTA-MCP.ps1` instaluje IIS aplikaci pod existující HTTPS web; doménu získá z jeho vazeb a nevytváří ani neupravuje site, certifikát nebo porty.
+- Předání dynamického `HTTP_PLATFORM_PORT` do Node.js je výslovně nastavené v HttpPlatformHandler konfiguraci.
+- Jednorázový instalační kód se vydá až po úspěšné readiness kontrole a ověření verze lokálního IIS procesu.
+- Neúspěšnou readiness kontrolu lze bezpečně zopakovat se stejným balíčkem; existující release se znovu použije bez přepsání.
+- Nasazovací skript podporuje aplikační identitu IIS i vyhrazený účet služby; heslo zadávané skrytým vstupem IIS uloží v chráněné konfiguraci.
+- Instalační návod popisuje PowerShell 7 x64, AppCmd, automatické určení HTTPS adresy, instalaci ZIP balíčku a volby identity aplikačního poolu.
+
 ## [0.3.1] – 2026-10-20
 
 ### Opraveno

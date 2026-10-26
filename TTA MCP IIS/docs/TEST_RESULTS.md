@@ -1,5 +1,12 @@
 # Výsledky ověření
 
+## 0.3.2 (2026-10-26)
+
+- `New-Build.ps1` úspěšně dokončil Windows x64 TypeScript kompilaci, Vite build i instalaci produkčních závislostí v dočasném sestavení mimo OneDrive. Výsledný ZIP je `C:\Temp\TTAMCP-Build\IIS\tta-mcp-server-iis-0.3.2-windows-x64.zip`; adresář posledního buildu je uveden v `C:\Temp\TTAMCP-Build\IIS\latest-release.txt`.
+- PowerShell 7 parser potvrdil syntaxi `Install-TTA-MCP.ps1`, `New-Build.ps1` a `Run-Local.ps1`. IIS XML šablona se načetla a obsahuje právě jedno předání `%HTTP_PLATFORM_PORT%` procesu Node.js.
+- ZIP byl zkontrolován: obsahuje nový instalátor, Windows x64 runtime metadata, zkompilovaný server, IIS šablonu a produkční závislosti; starý `Deploy-IIS.ps1` v něm není. Metadata potvrzují verzi 0.3.2 a Node.js 24.14.1 x64.
+- Skutečné nasazení na IIS/HttpPlatformHandler ani přihlášení ke konkrétní TTA instanci nebylo v tomto prostředí ověřeno; místní počítač nemá IIS AppCmd. Automatizovaná regresní sada nebyla spuštěna.
+
 ## 0.3.1 (2026-10-20)
 
 - Windows x64 TypeScript/Vite build a instalace produkčních závislostí proběhly v `C:\Temp\TTAMCP-Build\IIS\release-0.3.1-20261020141332907`.

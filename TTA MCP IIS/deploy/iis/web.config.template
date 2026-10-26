@@ -14,6 +14,7 @@
                   stdoutLogEnabled="true"
                   stdoutLogFile="@@STDOUT_LOG@@">
       <environmentVariables>
+        <environmentVariable name="HTTP_PLATFORM_PORT" value="%HTTP_PLATFORM_PORT%" />
         <environmentVariable name="TTA_HOST" value="127.0.0.1" />
         <environmentVariable name="TTA_BASE_PATH" value="@@BASE_PATH@@" />
         <environmentVariable name="TTA_DATA_DIR" value="@@DATA_DIR@@" />

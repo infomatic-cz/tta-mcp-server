@@ -13,6 +13,6 @@ Plán popisuje ověřitelné schopnosti dostupné v aplikaci a dokumentaci. Neoz
 | SQLite | Schéma, WAL, souběžný přístup, backup/restore, disk full. |
 | TTA adaptér | Každá metoda ověřena proti oficiálnímu SDK/REST kontraktu a konkrétní verzi instalace. |
 | UI | První setup, login, připojení CRUD, token create/revoke, menší viewport a přístupnost. |
-| IIS | Instalace HttpPlatformHandler, HTTPS binding 443, virtuální cesta, dynamický backend port, health endpointy, restart poolu, ACL a rollback na předchozí release. |
+| IIS | AppCmd discovery, HTTPS binding 443, virtuální cesta, předání `HTTP_PLATFORM_PORT`, pool identity/ACL, šifrování hesla custom identity, health endpointy a rollback. |
 
 Před každým skutečným TTA testem používat testovací instalaci a pouze bezpečné čtecí operace. Destruktivní operace nejsou implementovány.
